@@ -1,0 +1,32 @@
+defaults:
+  - img: flower
+  - optim: adam
+  - hydra # hydra stuff
+  - override hydra/launcher: basic_launcher
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+exp_name: inpainting_${img.name}
+seed: 0
+device: cuda # cpu or cuda
+
+train:
+  num_steps: 2000
+  log_steps: 10
+  batch_height: ${img.height}
+  batch_width: ${img.width}
+  save_weights: True
+  multiplier: 1   # for extended training
+  mixed_precision: True  # Using pytorch's amp
+
+loss:
+  forward: 1
+  feature: 0
+  clip: 1
+
+wandb:
+  use: True
+  entity: clip-recovery
+  project: sanity
+  api_key: ${hydra:runtime.cwd}/wandb_api.key
+  name: ${exp_name}

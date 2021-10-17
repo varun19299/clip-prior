@@ -1,0 +1,13 @@
+name: clip
+channels:
+  - conda-forge
+  - pytorch
+  - numba
+  - defaults
+dependencies:
+  - python=3.9
+  - pytorch
+  - torchvision
+  - pip
+  - pip:
+    - -r requirements.txt

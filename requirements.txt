@@ -1,0 +1,21 @@
+einops
+ftfy
+
+# Hydra Dependencies
+hydra_colorlog
+hydra-core>=1.1
+hydra-joblib-launcher
+hydra-optuna-sweeper
+
+ipython
+kornia
+numpy
+matplotlib
+opencv-python
+regex
+roipoly
+tqdm
+wandb
+
+# CLIP
+git+https://github.com/openai/CLIP.git
