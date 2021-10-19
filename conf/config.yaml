@@ -1,6 +1,7 @@
 defaults:
   - img: flower
   - optim: adam
+  - model: unet
   - hydra # hydra stuff
   - override hydra/launcher: basic_launcher
   - override hydra/job_logging: colorlog
@@ -9,6 +10,9 @@ defaults:
 exp_name: inpainting_${img.name}
 seed: 0
 device: cuda # cpu or cuda
+
+mask:
+  path: inpainting_mask.npy
 
 train:
   num_steps: 2000
@@ -20,9 +24,9 @@ train:
   mixed_precision: True  # Using pytorch's amp
 
 loss:
-  forward: 1
+  forward: 10
   feature: 0
-  clip: 1
+  clip: 0.1
 
 wandb:
   use: True

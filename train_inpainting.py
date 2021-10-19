@@ -1,14 +1,17 @@
 import numpy as np
 import torch
 from torch import nn
+from torch.nn import functional as F
 from PIL import Image
 import clip
 from einops import rearrange
 from tqdm import tqdm
 import wandb
 import os
+from pathlib import Path
 from roipoly import RoiPoly
 from matplotlib import pyplot as plt
+from models import registry
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -16,6 +19,33 @@ from omegaconf import DictConfig, OmegaConf
 from utils.catch_error import catch_error_decorator
 from utils.train_helper import get_optimizer_lr_scheduler, get_device
 from data import load_img
+
+
+def preprocess_for_CLIP(image):
+    """
+    pytorch-based preprocessing for CLIP
+
+    Source: https://github.com/codestella/putting-nerf-on-a-diet/blob/90427f6fd828abb2f0b7966fc82753ff43edb338/nerf/clip_utils.py#L153
+    Args:
+        image [B, 3, H, W]: batch image
+    Return
+        image [B, 3, 224, 224]: pre-processed image for CLIP
+    """
+    N, C, H, W = image.shape
+    device = image.device
+    dtype = image.dtype
+
+    mean = torch.tensor(
+        [0.48145466, 0.4578275, 0.40821073], device=device, dtype=dtype
+    ).reshape(1, 3, 1, 1)
+    std = torch.tensor(
+        [0.26862954, 0.26130258, 0.27577711], device=device, dtype=dtype
+    ).reshape(1, 3, 1, 1)
+    image = F.interpolate(
+        image, (224, 224), mode="bicubic"
+    )  # assume that images have rectangle shape.
+    image = (image - mean) / std
+    return image
 
 
 @catch_error_decorator
@@ -35,24 +65,34 @@ def main(cfg: DictConfig):
     # CLIP model
     model, preprocess = clip.load("ViT-B/32", device=device)
 
+    # Prior model (UNet, stylegan etc)
+    prior_model = registry[cfg.model.name](**cfg.model.kwargs)
+
     # Preprocess
-    img = preprocess(Image.fromarray(np.uint8(img * 255))).unsqueeze(0).to(device)
     text = clip.tokenize([cfg.img.caption]).to(device)
 
-    # Noise tensor
-    out = nn.Parameter(torch.rand(size=img.shape), requires_grad=True)
-
     # Choose RoI
-    plt.imshow(rearrange(img, "1 c h w -> h w c"))
-    plt.title("Choose region to mask out")
-    my_roi = RoiPoly(color="r")
-    my_roi.display_roi()
+    if not Path(cfg.mask.path).exists():
+        plt.imshow(img)
+        plt.title("Choose region to mask out")
+        my_roi = RoiPoly(color="r")
+        my_roi.display_roi()
 
-    mask = my_roi.get_mask(img[0, 0, :, :])
-    img[:, :, mask] = 0
+        # Get mask
+        mask = my_roi.get_mask(img[:, :, 0])
+
+        np.save(cfg.mask.path, mask)
+    else:
+        mask = np.load(cfg.mask.path)
+
+    img[mask] = 0
+
+    # Noise tensor
+    img = rearrange(img, "h w c -> 1 c h w")
+    noise_tensor = torch.rand(size=img.shape)
 
     # Optimizer
-    optim, lr_scheduler = get_optimizer_lr_scheduler([out], cfg.optim)
+    optim, lr_scheduler = get_optimizer_lr_scheduler(prior_model, cfg.optim)
 
     # wandb
     if cfg.wandb.use:
@@ -74,9 +114,10 @@ def main(cfg: DictConfig):
         pbar.update(1)
         optim.zero_grad()
 
-        img_features = model.encode_image(img)
+        out = prior_model(noise_tensor)
 
-        out_features = model.encode_image(out)
+        # CLIP similarity
+        out_features = model.encode_image(preprocess_for_CLIP(out))
         text_features = model.encode_text(text)
 
         # Cosine sim
@@ -91,11 +132,7 @@ def main(cfg: DictConfig):
         loss_forward = ((img[:, :, ~mask] - out[:, :, ~mask]) ** 2).mean()
         loss_forward *= cfg.loss.forward
 
-        # Feature space
-        loss_feature = ((out_features - img_features) ** 2).mean()
-        loss_feature *= cfg.loss.feature
-
-        loss = loss_forward + loss_feature + loss_clip
+        loss = loss_forward + loss_clip
         loss.backward()
 
         optim.step()
@@ -103,7 +140,6 @@ def main(cfg: DictConfig):
         # pbar
         log_dict = {
             "loss_forward": loss_forward,
-            "loss_feature": loss_feature.item(),
             "loss_clip": loss_clip.item(),
             "loss": loss.item(),
         }
