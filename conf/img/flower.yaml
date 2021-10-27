@@ -7,4 +7,4 @@ width: 128
 plot: False
 crop_mode: "resize-crop"
 save_gt: False
-caption: A pink flower
+caption: A hibiscus flower with a yellow center and detailled petals

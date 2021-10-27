@@ -1,5 +1,5 @@
 import cv2
-import kornia
+from kornia.geometry import resize, center_crop
 import torch
 from matplotlib import pyplot as plt
 
@@ -20,11 +20,11 @@ def load_img(
     if crop_mode == "resize-crop":
         # Resize such that shorter side matches corresponding target side
         smaller_side = min(height, width)
-        img = kornia.resize(
+        img = resize(
             img.unsqueeze(0), smaller_side, align_corners=False
         ).squeeze(0)
 
-    img = kornia.center_crop(img.unsqueeze(0), (height, width), align_corners=False)
+    img = center_crop(img.unsqueeze(0), (height, width), align_corners=False)
     img = img.squeeze(0).permute(1, 2, 0)
 
     if plot:

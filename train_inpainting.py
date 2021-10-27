@@ -1,24 +1,22 @@
-import numpy as np
-import torch
-from torch import nn
-from torch.nn import functional as F
-from PIL import Image
-import clip
-from einops import rearrange
-from tqdm import tqdm
-import wandb
 import os
 from pathlib import Path
-from roipoly import RoiPoly
-from matplotlib import pyplot as plt
-from models import registry
 
+import clip
 import hydra
+import numpy as np
+import torch
+import wandb
+from einops import rearrange
+from matplotlib import pyplot as plt
 from omegaconf import DictConfig, OmegaConf
+from roipoly import RoiPoly
+from torch.nn import functional as F
+from tqdm import tqdm
 
+from data import load_img
+from models import registry
 from utils.catch_error import catch_error_decorator
 from utils.train_helper import get_optimizer_lr_scheduler, get_device
-from data import load_img
 
 
 def preprocess_for_CLIP(image):
@@ -31,7 +29,6 @@ def preprocess_for_CLIP(image):
     Return
         image [B, 3, 224, 224]: pre-processed image for CLIP
     """
-    N, C, H, W = image.shape
     device = image.device
     dtype = image.dtype
 
@@ -63,10 +60,10 @@ def main(cfg: DictConfig):
     img = load_img(**cfg.img)
 
     # CLIP model
-    model, preprocess = clip.load("ViT-B/32", device=device)
+    clip_model, preprocess = clip.load("ViT-B/32", device=device)
 
     # Prior model (UNet, stylegan etc)
-    prior_model = registry[cfg.model.name](**cfg.model.kwargs)
+    prior_model = registry[cfg.model.name](**cfg.model.kwargs).to(device)
 
     # Preprocess
     text = clip.tokenize([cfg.img.caption]).to(device)
@@ -88,8 +85,8 @@ def main(cfg: DictConfig):
     img[mask] = 0
 
     # Noise tensor
-    img = rearrange(img, "h w c -> 1 c h w")
-    noise_tensor = torch.rand(size=img.shape)
+    img = rearrange(img, "h w c -> 1 c h w").to(device)
+    noise_tensor = torch.rand(size=img.shape).to(device)
 
     # Optimizer
     optim, lr_scheduler = get_optimizer_lr_scheduler(prior_model, cfg.optim)
@@ -117,15 +114,7 @@ def main(cfg: DictConfig):
         out = prior_model(noise_tensor)
 
         # CLIP similarity
-        out_features = model.encode_image(preprocess_for_CLIP(out))
-        text_features = model.encode_text(text)
-
-        # Cosine sim
-        loss_clip = (
-            1
-            - (out_features @ text_features.T)
-            / (out_features.norm() * text_features.norm()).squeeze()
-        )
+        loss_clip = 1 - clip_model(preprocess_for_CLIP(out), text)[0] / 100
         loss_clip *= cfg.loss.clip
 
         # MSE

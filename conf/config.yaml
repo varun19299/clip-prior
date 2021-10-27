@@ -15,8 +15,8 @@ mask:
   path: inpainting_mask.npy
 
 train:
-  num_steps: 2000
-  log_steps: 10
+  num_steps: 10000
+  log_steps: 100
   batch_height: ${img.height}
   batch_width: ${img.width}
   save_weights: True
@@ -24,9 +24,9 @@ train:
   mixed_precision: True  # Using pytorch's amp
 
 loss:
-  forward: 10
+  forward: 1
   feature: 0
-  clip: 0.1
+  clip: 1e-2
 
 wandb:
   use: True
