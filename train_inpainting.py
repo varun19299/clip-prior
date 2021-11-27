@@ -10,39 +10,12 @@ from einops import rearrange
 from matplotlib import pyplot as plt
 from omegaconf import DictConfig, OmegaConf
 from roipoly import RoiPoly
-from torch.nn import functional as F
 from tqdm import tqdm
 
 from data import load_img
 from models import registry
 from utils.catch_error import catch_error_decorator
-from utils.train_helper import get_optimizer_lr_scheduler, get_device
-
-
-def preprocess_for_CLIP(image):
-    """
-    pytorch-based preprocessing for CLIP
-
-    Source: https://github.com/codestella/putting-nerf-on-a-diet/blob/90427f6fd828abb2f0b7966fc82753ff43edb338/nerf/clip_utils.py#L153
-    Args:
-        image [B, 3, H, W]: batch image
-    Return
-        image [B, 3, 224, 224]: pre-processed image for CLIP
-    """
-    device = image.device
-    dtype = image.dtype
-
-    mean = torch.tensor(
-        [0.48145466, 0.4578275, 0.40821073], device=device, dtype=dtype
-    ).reshape(1, 3, 1, 1)
-    std = torch.tensor(
-        [0.26862954, 0.26130258, 0.27577711], device=device, dtype=dtype
-    ).reshape(1, 3, 1, 1)
-    image = F.interpolate(
-        image, (224, 224), mode="bicubic"
-    )  # assume that images have rectangle shape.
-    image = (image - mean) / std
-    return image
+from utils.train_helper import get_optimizer_lr_scheduler, get_device, preprocess_for_CLIP
 
 
 @catch_error_decorator

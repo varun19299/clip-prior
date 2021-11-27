@@ -1,0 +1,38 @@
+defaults:
+  - img: obama
+  - optim: adam
+  - hydra # hydra stuff
+  - override hydra/launcher: basic_launcher
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+exp_name: inpainting_${img.name}
+seed: 1
+device: cuda # cpu or cuda
+
+mask:
+  path: inpainting_mask_seed_${seed}_size_${img.width}x${img.width}.npy
+
+train:
+  num_steps: 1000
+  log_steps: 10
+  save_weights: True
+
+stylegan:
+  size: ${img.width}
+  ckpt: ${hydra:runtime.cwd}/outputs/ckpt/stylegan2-ffhq-config-f.pt
+  noise_type: trainable # or zero or fixed
+  num_trainable_noise_layers: 5
+  bad_noise_layers: [17]
+
+loss:
+  forward: 1
+  clip: 0.1
+  geocross: 0.05
+
+wandb:
+  use: True
+  entity: clip-recovery
+  project: sanity
+  api_key: ${hydra:runtime.cwd}/wandb_api.key
+  name: ${exp_name}
