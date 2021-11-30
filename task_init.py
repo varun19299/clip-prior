@@ -4,16 +4,17 @@ Initialization functions for a Task
 Eg: Drawing mask, getting downsampling function setup
 """
 
-from utils.bicubic import BicubicDownSample
 from functools import partial
-from loss import forward_loss_registry
-from torch.nn import functional as F
+from pathlib import Path
+
+import numpy as np
+from einops import rearrange
 from loguru import logger
 from matplotlib import pyplot as plt
-from pathlib import Path
 from roipoly import RoiPoly
-from einops import rearrange
-import numpy as np
+from torch.nn import functional as F
+
+from utils.bicubic import BicubicDownSample
 
 task_registry = {}
 
@@ -29,12 +30,9 @@ def super_resolution(img, task_cfg, **kwargs):
     )
     metric = eval(task_cfg.get("metric", F.mse_loss))
 
-    forward_func = partial(
-        forward_loss_registry[task_cfg.name],
-        downsample_func=downsample_func,
-        metric=metric,
-    )
-    return img, forward_func
+    forward_func = downsample_func
+
+    return img, forward_func, metric
 
 
 @_register
@@ -66,8 +64,11 @@ def inpainting(img, task_cfg, **kwargs):
     # Forward func
     metric = eval(task_cfg.get("metric", F.mse_loss))
 
-    forward_func = partial(
-        forward_loss_registry[task_cfg.name], mask=mask, metric=metric
-    )
+    def _mask_image(image, mask):
+        assert image.ndim == 4, "Expected NCHW format"
+        assert mask.ndim == 2, "Expected HW format"
+        return image[:, :, mask]
 
-    return img, forward_func
+    forward_func = partial(_mask_image, mask=mask)
+
+    return img, forward_func, metric

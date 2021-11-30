@@ -81,7 +81,7 @@ def main(cfg: DictConfig):
         # Save groundtruth
         if cfg.save_gt:
             logger.info("Saving Groundtruth")
-            cv2.imwrite("groundtruth.png", img_plot[:, :, ::-1])
+            cv2.imwrite("groundtruth.png", img_plot[:, :, ::-1] * 255)
 
     # wandb
     if cfg.wandb.use:
@@ -110,7 +110,7 @@ def main(cfg: DictConfig):
         )
 
     # Setup forward func, modify img
-    img, forward_func = task_registry[cfg.task.name](img, cfg.task)
+    img, forward_func, metric = task_registry[cfg.task.name](img, cfg.task)
 
     # CLIP model
     clip_loss = CLIPLoss(cfg.stylegan, device=device)
@@ -170,7 +170,7 @@ def main(cfg: DictConfig):
         loss_clip = clip_loss(out, text) * cfg.loss.clip
 
         # MSE
-        loss_forward = forward_func(img, out)
+        loss_forward = metric(forward_func(img), forward_func(out))
         loss_forward *= cfg.loss.forward
 
         # Geocross
@@ -196,7 +196,7 @@ def main(cfg: DictConfig):
                 {
                     "input_image": [
                         wandb.Image(
-                            img.detach(),
+                            forward_func(img).detach(),
                             caption=cfg.img.name,
                         )
                     ],

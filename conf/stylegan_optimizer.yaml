@@ -23,12 +23,12 @@ stylegan:
   num_trainable_noise_layers: 5
   bad_noise_layers: [17]
 
-plot: True
+plot: False
 save_gt: True
 
 loss:
   forward: 1
-  clip: 0.1
+  clip: 0
   geocross: 0.05
 
 wandb:
