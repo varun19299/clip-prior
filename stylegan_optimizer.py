@@ -2,127 +2,86 @@ import os
 from pathlib import Path
 
 import clip
+import cv2
 import hydra
-import numpy as np
 import torch
 import wandb
 from einops import rearrange
+from loguru import logger
 from matplotlib import pyplot as plt
 from omegaconf import DictConfig, OmegaConf
-from roipoly import RoiPoly
 from tqdm import tqdm
 
-from data import load_img
+from loss import CLIPLoss
 from models.stylegan import Generator
+from task_init import task_registry
 from utils.catch_error import catch_error_decorator
 from utils.train_helper import (
     get_optimizer_lr_scheduler,
     get_device,
-    CLIPLoss,
     LossGeocross,
 )
 
 
 @catch_error_decorator
-@hydra.main(config_name="inpainting_stylegan", config_path="conf")
+@hydra.main(config_name=Path(__file__).stem, config_path="conf")
 def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
 
     # Manual seeds
-    torch.manual_seed(cfg.seed)
+    if cfg.get("seed"):
+        torch.manual_seed(cfg.seed)
+
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(cfg.seed)
+            torch.backends.cudnn.deterministic = True
 
     # Set device
     device = get_device(cfg.device)
 
     # StyleGANv2
     g_ema = Generator(cfg.stylegan.size, 512, 8)
+    logger.info(f"Loading StyleGANv2 ckpt from {cfg.stylegan.ckpt}")
     stylegan_ckpt = torch.load(cfg.stylegan.ckpt, map_location="cpu")["g_ema"]
     g_ema.load_state_dict(stylegan_ckpt, strict=False)
     g_ema.eval()
     g_ema = g_ema.to(device)
 
+    # Pick mean latent if no image supplied
     ## TODO: Why 4096?
-    ## TODO: Mean will ensure same output always
-    latent_code_init = g_ema.mean_latent(n_latent=4096).detach().clone().repeat(1, 18, 1)
+    latent_path = Path(cfg.img.get("latent_path", "mean_latent.pt"))
+    if not latent_path.exists():
+        logger.info(f"No latent file at {latent_path}")
+        latent_init = g_ema.mean_latent(n_latent=4096).detach().clone().repeat(1, 18, 1)
+    else:
+        logger.info(f"Found latent file at {latent_path}")
+        latent_init = torch.load(cfg.img.latent_path).unsqueeze(0).repeat(1, 18, 1)
+
+    # Random init, from where optimization begins
     random_latent = g_ema.random_latent().clone().detach().repeat(1, 18, 1)
-
-    # Image (H x W x 3)
-    if cfg.img.get("from_stylegan"):
-        with torch.no_grad():
-            img, _ = g_ema(
-                [latent_code_init],
-                input_is_latent=True,
-                randomize_noise=False,
-            )
-            img = rearrange(img.clone(), "1 c h w -> h w c")
-
-    else:
-        img = load_img(**cfg.img)
-
-    # sample_z = torch.randn(1, 512, device=device).detach().clone().repeat(1, 18, 1)
-    # sample, _ = g_ema([sample_z], truncation_latent=mean_latent)
-
-    # Choose RoI
-    if not Path(cfg.mask.path).exists():
-        plt.imshow(img)
-        plt.title("Choose region to mask out")
-        my_roi = RoiPoly(color="r")
-        my_roi.display_roi()
-
-        # Get mask
-        mask = my_roi.get_mask(img[:, :, 0])
-
-        np.save(cfg.mask.path, mask)
-    else:
-        mask = np.load(cfg.mask.path)
-
-    # CLIP model
-    clip_loss = CLIPLoss(cfg.stylegan, device=device)
-
-    # Preprocess
-    text = clip.tokenize([cfg.img.caption]).to(device)
-
-    img[mask] = 0
-
-    # Noise tensor
-    img = rearrange(img, "h w c -> 1 c h w").to(device)
-
-    # Latent init
     random_latent.requires_grad = True
 
-    # Trainable noise (adds to style)
-    num_layers = g_ema.num_layers
-    num_trainable_noise_layers = cfg.stylegan.num_trainable_noise_layers
-    noise_type = cfg.stylegan.noise_type
-    bad_noise_layers = cfg.stylegan.bad_noise_layers
+    # Generate img from StyleGAN
+    with torch.no_grad():
+        img, _ = g_ema(
+            [latent_init],
+            input_is_latent=True,
+            randomize_noise=False,
+        )
 
-    noise = []
-    noise_vars = []
+        img_plot = rearrange(img.numpy(), "1 c h w -> h w c")
+        img_plot = (img_plot - img_plot.min()) / (img_plot.max() - img_plot.min())
 
-    for i in range(18):
-        # dimension of the ith noise tensor
-        res = (1, 1, 2 ** (i // 2 + 2), 2 ** (i // 2 + 2))
+        # Plot image
+        if cfg.plot:
+            logger.info("Plotting Groundtruth")
+            plt.imshow(img_plot)
+            plt.show()
 
-        if (noise_type == "zero") or (i in bad_noise_layers):
-            new_noise = torch.zeros(res, dtype=torch.float, device=device)
-            new_noise.requires_grad = False
-        elif noise_type == "fixed":
-            new_noise = torch.randn(res, dtype=torch.float, device=device)
-            new_noise.requires_grad = False
-        elif noise_type == "trainable":
-            new_noise = torch.randn(res, dtype=torch.float, device=device)
-            if i < num_trainable_noise_layers:
-                new_noise.requires_grad = True
-                noise_vars.append(new_noise)
-            else:
-                new_noise.requires_grad = False
-        else:
-            raise Exception(f"unknown noise type {noise_type}")
-
-    var_list = [random_latent] + noise_vars
-
-    # Optimizer
-    optim, lr_scheduler = get_optimizer_lr_scheduler(var_list, cfg.optim)
+        # Save groundtruth
+        if cfg.save_gt:
+            logger.info("Saving Groundtruth")
+            cv2.imwrite("groundtruth.png", img_plot[:, :, ::-1])
 
     # wandb
     if cfg.wandb.use:
@@ -138,6 +97,62 @@ def main(cfg: DictConfig):
             save_code=True,
         )
 
+        wandb.log(
+            {
+                "groundtruth": [
+                    wandb.Image(
+                        img.detach(),
+                        caption=cfg.img.name,
+                    )
+                ],
+            },
+            step=0,
+        )
+
+    # Setup forward func, modify img
+    img, forward_func = task_registry[cfg.task.name](img, cfg.task)
+
+    # CLIP model
+    clip_loss = CLIPLoss(cfg.stylegan, device=device)
+
+    # Preprocess
+    text = clip.tokenize([cfg.img.caption]).to(device)
+
+    img = img.to(device)
+
+    # Trainable noise (adds to style)
+    num_layers = g_ema.num_layers
+    num_trainable_noise_layers = cfg.stylegan.num_trainable_noise_layers
+    noise_type = cfg.stylegan.noise_type
+    bad_noise_layers = cfg.stylegan.bad_noise_layers
+
+    noise_ll = []
+    noise_vars = []
+
+    for i in range(num_layers):
+        noise_tensor = getattr(g_ema.noises, f"noise_{i}")
+
+        if (noise_type == "zero") or (i in bad_noise_layers):
+            new_noise = torch.zeros_like(noise_tensor)
+            new_noise.requires_grad = False
+        elif noise_type == "fixed":
+            new_noise = noise_tensor
+        elif noise_type == "trainable":
+            new_noise = noise_tensor.detach().clone()
+            if i < num_trainable_noise_layers:
+                new_noise.requires_grad = True
+                noise_vars.append(new_noise)
+            else:
+                new_noise.requires_grad = False
+        else:
+            raise Exception(f"unknown noise type {noise_type}")
+
+        noise_ll.append(new_noise)
+
+    var_list = [random_latent] + noise_vars
+    # Optimizer
+    optim, lr_scheduler = get_optimizer_lr_scheduler(var_list, cfg.optim)
+
     # Train
     pbar = tqdm(total=cfg.train.num_steps)
     for step in range(cfg.train.num_steps):
@@ -145,14 +160,17 @@ def main(cfg: DictConfig):
         optim.opt.zero_grad()
 
         out, _ = g_ema(
-            [random_latent], input_is_latent=True, noise_tensor_ll=noise_vars
+            [random_latent],
+            input_is_latent=True,
+            noise_tensor_ll=noise_ll,
+            randomize_noise=False,
         )
 
         # CLIP similarity
         loss_clip = clip_loss(out, text) * cfg.loss.clip
 
         # MSE
-        loss_forward = ((img[:, :, ~mask] - out[:, :, ~mask]) ** 2).mean()
+        loss_forward = forward_func(img, out)
         loss_forward *= cfg.loss.forward
 
         # Geocross

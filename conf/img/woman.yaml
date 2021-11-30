@@ -1,6 +1,5 @@
 # @package img
 name: woman
-bits: 8
 path: ${hydra:runtime.cwd}/data/rgb-jpeg/${img.name}.jpg
 height: 256
 width: 256

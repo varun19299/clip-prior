@@ -1,0 +1,2 @@
+name: inpainting
+mask_path: inpainting_mask_seed_${seed}_size_${img.width}.npy

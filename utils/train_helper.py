@@ -2,12 +2,10 @@ from contextlib import contextmanager
 from typing import Dict, List, Tuple
 
 import torch
-from torch.nn import Module, functional as F
+from torch.nn import functional as F
 
 from torch.optim import Optimizer
-import math
 import numpy as np
-import clip
 
 
 @contextmanager
@@ -48,28 +46,21 @@ class SphericalOptimizer(Optimizer):
         return loss
 
 
-class CLIPLoss(torch.nn.Module):
-    def __init__(self, stylegan_cfg, device=torch.device("cpu")):
-        super(CLIPLoss, self).__init__()
-        self.model, self.preprocess = clip.load("ViT-B/32", device=device)
-        self.upsample = torch.nn.Upsample(scale_factor=7)
-        self.avg_pool = torch.nn.AvgPool2d(kernel_size=stylegan_cfg.size // 32)
-
-    def forward(self, image, text):
-        image = self.avg_pool(self.upsample(image))
-        similarity = 1 - self.model(image, text)[0] / 100
-        return similarity
-
-
 def get_optimizer_lr_scheduler(
-    params: List, optim_cfg: Dict, quantize_mode: bool = False
+    params: List,
+    optim_cfg: Dict,
 ) -> Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler._LRScheduler]:
     optim_dict = {
         "adam": torch.optim.Adam,
     }
 
-    optim = SphericalOptimizer(optim_dict[optim_cfg.name], params, lr=optim_cfg.lr)
+    # Spherical Optimizer
+    if optim_cfg.get("use_spherical"):
+        optim = SphericalOptimizer(optim_dict[optim_cfg.name], params, lr=optim_cfg.lr)
+    else:
+        optim = optim_dict[optim_cfg.name](params, lr=optim_cfg.lr)
 
+    # Source: https://github.com/marcin-laskowski/Pulse/blob/05eeab38c3a5e52055549c1b12b4f86427cf6883/PULSE.py#L127
     steps = optim_cfg.num_steps
     schedule_dict = {
         "fixed": lambda x: 1,

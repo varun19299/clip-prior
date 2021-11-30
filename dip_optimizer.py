@@ -15,11 +15,15 @@ from tqdm import tqdm
 from data import load_img
 from models import registry
 from utils.catch_error import catch_error_decorator
-from utils.train_helper import get_optimizer_lr_scheduler, get_device, preprocess_for_CLIP
+from utils.train_helper import (
+    get_optimizer_lr_scheduler,
+    get_device,
+    preprocess_for_CLIP,
+)
 
 
 @catch_error_decorator
-@hydra.main(config_name="config", config_path="conf")
+@hydra.main(config_name=Path(__file__).stem, config_path="conf")
 def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
 
@@ -62,7 +66,9 @@ def main(cfg: DictConfig):
     noise_tensor = torch.rand(size=img.shape).to(device)
 
     # Optimizer
-    optim, lr_scheduler = get_optimizer_lr_scheduler(prior_model, cfg.optim)
+    optim, lr_scheduler = get_optimizer_lr_scheduler(
+        prior_model.parameters(), cfg.optim
+    )
 
     # wandb
     if cfg.wandb.use:

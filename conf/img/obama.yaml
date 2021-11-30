@@ -1,10 +1,4 @@
 # @package img
 name: obama
-bits: 8
-path: ${hydra:runtime.cwd}/data/rgb-jpeg/${img.name}.jpg
-height: 1024
-width: 1024
-plot: False
-crop_mode: "resize-crop"
-save_gt: False
+latent_path: ${hydra:runtime.cwd}/data/latents/${img.name}.pt
 caption: This is president Barack Obama

@@ -9,6 +9,7 @@ hydra-optuna-sweeper
 
 ipython
 kornia
+loguru
 numpy
 matplotlib
 opencv-python
