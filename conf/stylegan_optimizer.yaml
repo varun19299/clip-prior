@@ -7,13 +7,13 @@ defaults:
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
-exp_name: inpainting_${img.name}
-seed: 1
+exp_name: ${task.name}_${img.name}
+seed: null
 device: cuda # cpu or cuda
 
 train:
   num_steps: 1000
-  log_steps: 10
+  log_steps: 50
   save_weights: True
 
 stylegan:
@@ -23,12 +23,9 @@ stylegan:
   num_trainable_noise_layers: 5
   bad_noise_layers: [17]
 
-plot: False
-save_gt: True
-
 loss:
-  forward: 1
-  clip: 0
+  forward: 10
+  clip: 1
   geocross: 0.05
 
 wandb:

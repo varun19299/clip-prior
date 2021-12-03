@@ -17,6 +17,7 @@ from models.stylegan import Generator
 from task_init import task_registry
 from utils.catch_error import catch_error_decorator
 from utils.train_helper import (
+    manual_seed,
     get_optimizer_lr_scheduler,
     get_device,
     LossGeocross,
@@ -29,15 +30,15 @@ def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
 
     # Manual seeds
-    if cfg.get("seed"):
-        torch.manual_seed(cfg.seed)
-
-        if torch.cuda.is_available():
-            torch.cuda.manual_seed(cfg.seed)
-            torch.backends.cudnn.deterministic = True
+    manual_seed(cfg.get("seed"))
 
     # Set device
     device = get_device(cfg.device)
+
+    # Log more frequently on CPU
+    # Assuming you will be debugging then
+    if device == torch.device("cpu"):
+        cfg.train.log_steps = 5
 
     # StyleGANv2
     g_ema = Generator(cfg.stylegan.size, 512, 8)
@@ -48,7 +49,6 @@ def main(cfg: DictConfig):
     g_ema = g_ema.to(device)
 
     # Pick mean latent if no image supplied
-    ## TODO: Why 4096?
     latent_path = Path(cfg.img.get("latent_path", "mean_latent.pt"))
     if not latent_path.exists():
         logger.info(f"No latent file at {latent_path}")
@@ -68,20 +68,6 @@ def main(cfg: DictConfig):
             input_is_latent=True,
             randomize_noise=False,
         )
-
-        img_plot = rearrange(img.numpy(), "1 c h w -> h w c")
-        img_plot = (img_plot - img_plot.min()) / (img_plot.max() - img_plot.min())
-
-        # Plot image
-        if cfg.plot:
-            logger.info("Plotting Groundtruth")
-            plt.imshow(img_plot)
-            plt.show()
-
-        # Save groundtruth
-        if cfg.save_gt:
-            logger.info("Saving Groundtruth")
-            cv2.imwrite("groundtruth.png", img_plot[:, :, ::-1] * 255)
 
     # wandb
     if cfg.wandb.use:
@@ -112,8 +98,21 @@ def main(cfg: DictConfig):
     # Setup forward func, modify img
     img, forward_func, metric = task_registry[cfg.task.name](img, cfg.task)
 
+    if cfg.wandb.use:
+        wandb.log(
+            {
+                "input_image": [
+                    wandb.Image(
+                        forward_func(img).detach(),
+                        caption=cfg.img.name,
+                    )
+                ],
+            },
+            step=0,
+        )
+
     # CLIP model
-    clip_loss = CLIPLoss(cfg.stylegan, device=device)
+    clip_loss = CLIPLoss(image_size=cfg.stylegan.size, device=device)
 
     # Preprocess
     text = clip.tokenize([cfg.img.caption]).to(device)
@@ -194,15 +193,15 @@ def main(cfg: DictConfig):
         if step % cfg.train.log_steps == 0:
             log_dict.update(
                 {
-                    "input_image": [
+                    "output": [
                         wandb.Image(
-                            forward_func(img).detach(),
+                            out.detach(),
                             caption=cfg.img.name,
                         )
                     ],
-                    "output_image": [
+                    "output_forward": [
                         wandb.Image(
-                            out.detach(),
+                            forward_func(out).detach(),
                             caption=cfg.img.name,
                         )
                     ],

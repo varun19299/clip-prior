@@ -1,0 +1,5 @@
+name: deblurring
+kernel_size: (511, 511)
+sigma: (100, 100)
+blur_func: filters.GaussianBlur2d(${task.kernel_size}, ${task.sigma})
+metric: F.mse_loss

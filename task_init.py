@@ -13,6 +13,7 @@ from loguru import logger
 from matplotlib import pyplot as plt
 from roipoly import RoiPoly
 from torch.nn import functional as F
+from kornia import filters
 
 from utils.bicubic import BicubicDownSample
 
@@ -24,21 +25,30 @@ def _register(func):
 
 
 @_register
-def super_resolution(img, task_cfg, **kwargs):
-    downsample_func = eval(task_cfg.get("downsample_func", BicubicDownSample))(
+def super_resolution(img, task_cfg):
+    forward_func = eval(task_cfg.get("downsample_func", BicubicDownSample))(
         task_cfg.factor
     )
     metric = eval(task_cfg.get("metric", F.mse_loss))
-
-    forward_func = downsample_func
 
     return img, forward_func, metric
 
 
 @_register
-def inpainting(img, task_cfg, **kwargs):
+def deblurring(img, task_cfg):
+    forward_func = eval(
+        task_cfg.get("blur_func", "filters.GaussianBlur2d((10, 10), 10)")
+    )
+
+    metric = eval(task_cfg.get("metric", F.mse_loss))
+
+    return img, forward_func, metric
+
+
+@_register
+def inpainting(img, task_cfg):
     # Rearrange, normalize to 0...1
-    img_draw = rearrange(img.clone(), "1 c h w -> h w c")
+    img_draw = rearrange(img.cpu().clone(), "1 c h w -> h w c")
     img_draw = (img_draw - img_draw.min()) / (img_draw.max() - img_draw.min())
 
     # Choose RoI

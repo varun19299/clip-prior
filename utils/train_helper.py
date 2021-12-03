@@ -19,6 +19,15 @@ def get_device(device_str: str) -> torch.device:
     else:
         return torch.device("cpu")
 
+def manual_seed(seed):
+    # Manual seeds
+    if seed is not None:
+        torch.manual_seed(seed)
+
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+            torch.backends.cudnn.deterministic = True
+
 
 class SphericalOptimizer(Optimizer):
     def __init__(self, optimizer, params, **kwargs):

@@ -3,22 +3,20 @@ from pathlib import Path
 
 import clip
 import hydra
-import numpy as np
 import torch
 import wandb
-from einops import rearrange
-from matplotlib import pyplot as plt
 from omegaconf import DictConfig, OmegaConf
-from roipoly import RoiPoly
 from tqdm import tqdm
 
 from data import load_img
+from loss import CLIPLoss
 from models import registry
+from task_init import task_registry
 from utils.catch_error import catch_error_decorator
 from utils.train_helper import (
+    manual_seed,
     get_optimizer_lr_scheduler,
     get_device,
-    preprocess_for_CLIP,
 )
 
 
@@ -28,16 +26,21 @@ def main(cfg: DictConfig):
     print(OmegaConf.to_yaml(cfg))
 
     # Manual seeds
-    torch.manual_seed(cfg.seed)
+    manual_seed(cfg.get("seed"))
 
     # Set device
     device = get_device(cfg.device)
+
+    # Log more frequently on CPU
+    # Assuming you will be debugging then
+    if device == torch.device("cpu"):
+        cfg.train.log_steps = 5
 
     # Image (H x W x 3)
     img = load_img(**cfg.img)
 
     # CLIP model
-    clip_model, preprocess = clip.load("ViT-B/32", device=device)
+    clip_loss = CLIPLoss(image_size=cfg.stylegan.size, device=device)
 
     # Prior model (UNet, stylegan etc)
     prior_model = registry[cfg.model.name](**cfg.model.kwargs).to(device)
@@ -45,24 +48,49 @@ def main(cfg: DictConfig):
     # Preprocess
     text = clip.tokenize([cfg.img.caption]).to(device)
 
-    # Choose RoI
-    if not Path(cfg.mask.path).exists():
-        plt.imshow(img)
-        plt.title("Choose region to mask out")
-        my_roi = RoiPoly(color="r")
-        my_roi.display_roi()
+    # wandb
+    if cfg.wandb.use:
+        with open(cfg.wandb.api_key) as f:
+            os.environ["WANDB_API_KEY"] = f.read()
 
-        # Get mask
-        mask = my_roi.get_mask(img[:, :, 0])
+        wandb.init(
+            entity=cfg.wandb.entity,
+            config=OmegaConf.to_container(cfg, resolve=True),
+            project=cfg.wandb.project,
+            name=cfg.wandb.name,
+            reinit=True,
+            save_code=True,
+        )
 
-        np.save(cfg.mask.path, mask)
-    else:
-        mask = np.load(cfg.mask.path)
+        wandb.log(
+            {
+                "groundtruth": [
+                    wandb.Image(
+                        img.detach(),
+                        caption=cfg.img.name,
+                    )
+                ],
+            },
+            step=0,
+        )
 
-    img[mask] = 0
+    # Setup forward func, modify img
+    img, forward_func, metric = task_registry[cfg.task.name](img, cfg.task)
+
+    if cfg.wandb.use:
+        wandb.log(
+            {
+                "input_image": [
+                    wandb.Image(
+                        forward_func(img).detach(),
+                        caption=cfg.img.name,
+                    )
+                ],
+            },
+            step=0,
+        )
 
     # Noise tensor
-    img = rearrange(img, "h w c -> 1 c h w").to(device)
     noise_tensor = torch.rand(size=img.shape).to(device)
 
     # Optimizer
@@ -93,17 +121,17 @@ def main(cfg: DictConfig):
         out = prior_model(noise_tensor)
 
         # CLIP similarity
-        loss_clip = 1 - clip_model(preprocess_for_CLIP(out), text)[0] / 100
-        loss_clip *= cfg.loss.clip
+        loss_clip = clip_loss(out, text) * cfg.loss.clip
 
         # MSE
-        loss_forward = ((img[:, :, ~mask] - out[:, :, ~mask]) ** 2).mean()
+        loss_forward = metric(forward_func(img), forward_func(out))
         loss_forward *= cfg.loss.forward
 
         loss = loss_forward + loss_clip
         loss.backward()
 
         optim.step()
+        lr_scheduler.step()
 
         # pbar
         log_dict = {
@@ -116,15 +144,15 @@ def main(cfg: DictConfig):
         if step % cfg.train.log_steps == 0:
             log_dict.update(
                 {
-                    "input_image": [
+                    "output": [
                         wandb.Image(
-                            img.detach(),
+                            out.detach(),
                             caption=cfg.img.name,
                         )
                     ],
-                    "output_image": [
+                    "output_forward": [
                         wandb.Image(
-                            out.detach(),
+                            forward_func(out).detach(),
                             caption=cfg.img.name,
                         )
                     ],

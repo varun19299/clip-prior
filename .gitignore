@@ -2,3 +2,5 @@ wandb_api.key
 outputs
 __pycache__
 .idea
+
+data/ffhq

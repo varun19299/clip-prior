@@ -23,8 +23,12 @@ Avaliable at `outputs/ckpt`:
 * [`rosalinity-stylegan2-ffhq-config-f.pt`](https://github.com/rosinality/stylegan2-pytorch#pretrained-checkpoints): from here, suitable ONLY for 256px.
 * [`stylegan2-ffhq-config-f.pt`](https://drive.google.com/file/d/1EM87UquaoQmk17Q8d5kYIAHqu0dkYqdT/view?usp=sharing): used in the e4e paper, looks like the converted NVLab ckpt. Suitable for 1MPixel.
 
+## Data
+
+* [FFHQ](): each image has original, estimated latent vector and inversion.
+
 ## View all configs
 
-python train_inpainting.py --cfg job
+python dip_optimizer.py --cfg job
 
 We use [hydra](https://github.com/facebookresearch/hydra) for configs. YAML files present under conf/.
