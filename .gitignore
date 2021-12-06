@@ -3,4 +3,4 @@ outputs
 __pycache__
 .idea
 
-data/ffhq
+data

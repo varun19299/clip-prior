@@ -7,7 +7,7 @@ defaults:
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
-exp_name: ${task.name}_${img.name}
+exp_name: stylegan
 seed: null
 device: cuda # cpu or cuda
 
@@ -33,4 +33,4 @@ wandb:
   entity: clip-recovery
   project: stylegan_${task.name}
   api_key: ${hydra:runtime.cwd}/wandb_api.key
-  name: ${exp_name}
+  name: ${exp_name}_${img.name}

@@ -2,26 +2,20 @@ defaults:
   - img: flower
   - optim: adam
   - model: unet
+  - task: inpainting
   - hydra # hydra stuff
   - override hydra/launcher: basic_launcher
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
-exp_name: inpainting_${img.name}
+exp_name: dip
 seed: 0
 device: cuda # cpu or cuda
-
-mask:
-  path: inpainting_mask.npy
 
 train:
   num_steps: 10000
   log_steps: 100
-  batch_height: ${img.height}
-  batch_width: ${img.width}
   save_weights: True
-  multiplier: 1   # for extended training
-  mixed_precision: True  # Using pytorch's amp
 
 loss:
   forward: 1
@@ -31,6 +25,6 @@ loss:
 wandb:
   use: True
   entity: clip-recovery
-  project: sanity
+  project: dip_${task.name}
   api_key: ${hydra:runtime.cwd}/wandb_api.key
-  name: ${exp_name}
+  name: ${exp_name}_${img.name}

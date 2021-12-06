@@ -1,7 +1,10 @@
+import os
 from contextlib import contextmanager
 from typing import Dict, List, Tuple
 
 import torch
+import wandb
+from omegaconf import OmegaConf
 from torch.nn import functional as F
 
 from torch.optim import Optimizer
@@ -18,6 +21,7 @@ def get_device(device_str: str) -> torch.device:
         return torch.device(device_str)
     else:
         return torch.device("cpu")
+
 
 def manual_seed(seed):
     # Manual seeds
@@ -82,7 +86,10 @@ def get_optimizer_lr_scheduler(
         else 1 / 10 + (x - 0.9 * steps) / (0.1 * steps) * (1 / 1000 - 1 / 10),
     }
     schedule_func = schedule_dict[optim_cfg.schedule]
-    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optim.opt, schedule_func)
+
+    ## TODO: hackish
+    opt = optim.opt if optim_cfg.get("use_spherical") else optim
+    lr_scheduler = torch.optim.lr_scheduler.LambdaLR(opt, schedule_func)
 
     return optim, lr_scheduler
 
@@ -113,17 +120,50 @@ def preprocess_for_CLIP(image):
     return image
 
 
-def LossGeocross(latent):
-    """
-    Uses geodesic distance on sphere to sum pairwise distances of the 18 vectors
-    """
-    if latent.shape[1] == 1:
-        return 0
-    else:
-        X = latent.view(-1, 1, 18, 512)
-        Y = latent.view(-1, 18, 1, 512)
-        A = ((X - Y).pow(2).sum(-1) + 1e-9).sqrt()
-        B = ((X + Y).pow(2).sum(-1) + 1e-9).sqrt()
-        D = 2 * torch.atan2(A, B)
-        D = ((D.pow(2) * 512).mean((1, 2)) / 8.0).sum()
-        return D
+def train_setup(cfg):
+    print(OmegaConf.to_yaml(cfg))
+
+    # Manual seeds
+    manual_seed(cfg.get("seed"))
+
+    # Set device
+    device = get_device(cfg.device)
+
+    # Log more frequently on CPU
+    # Assuming you will be debugging then
+    if device == torch.device("cpu"):
+        cfg.train.log_steps = 5
+
+    return device
+
+
+def wandb_image(img_tensor, caption: str = None):
+    return [
+        wandb.Image(
+            img_tensor.detach(),
+            caption=caption,
+        )
+    ]
+
+
+def setup_wandb(cfg, img, forward_func):
+    if cfg.wandb.use:
+        with open(cfg.wandb.api_key) as f:
+            os.environ["WANDB_API_KEY"] = f.read()
+
+        wandb.init(
+            entity=cfg.wandb.entity,
+            config=OmegaConf.to_container(cfg, resolve=True),
+            project=cfg.wandb.project,
+            name=cfg.wandb.name,
+            reinit=True,
+            save_code=True,
+        )
+
+        wandb.log(
+            {
+                "groundtruth": wandb_image(img, cfg.img.name),
+                "input_image": wandb_image(forward_func(img), cfg.img.name),
+            },
+            step=0,
+        )

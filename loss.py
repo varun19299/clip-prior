@@ -13,3 +13,19 @@ class CLIPLoss(torch.nn.Module):
         image = self.avg_pool(self.upsample(image))
         similarity = 1 - self.model(image, text)[0] / 100
         return similarity
+
+
+def LossGeocross(latent):
+    """
+    Uses geodesic distance on sphere to sum pairwise distances of the 18 vectors
+    """
+    if latent.shape[1] == 1:
+        return 0
+    else:
+        X = latent.view(-1, 1, 18, 512)
+        Y = latent.view(-1, 18, 1, 512)
+        A = ((X - Y).pow(2).sum(-1) + 1e-9).sqrt()
+        B = ((X + Y).pow(2).sum(-1) + 1e-9).sqrt()
+        D = 2 * torch.atan2(A, B)
+        D = ((D.pow(2) * 512).mean((1, 2)) / 8.0).sum()
+        return D

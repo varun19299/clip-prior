@@ -14,6 +14,7 @@ from matplotlib import pyplot as plt
 from roipoly import RoiPoly
 from torch.nn import functional as F
 from kornia import filters
+import torch
 
 from utils.bicubic import BicubicDownSample
 
@@ -52,8 +53,8 @@ def inpainting(img, task_cfg):
     img_draw = (img_draw - img_draw.min()) / (img_draw.max() - img_draw.min())
 
     # Choose RoI
-    if not Path(task_cfg.mask.path).exists():
-        logger.info(f"No mask found at {task_cfg.mask.path}")
+    if not Path(task_cfg.mask_path).exists():
+        logger.info(f"No mask found at {task_cfg.mask_path}")
 
         plt.imshow(img_draw)
         plt.title("Choose region to mask out")
@@ -63,21 +64,23 @@ def inpainting(img, task_cfg):
         # Get mask
         mask = my_roi.get_mask(img_draw[:, :, 0])
 
-        np.save(task_cfg.mask.path, mask)
+        np.save(task_cfg.mask_path, mask)
     else:
-        logger.info(f"Loaded mask from {task_cfg.mask.path}")
-        mask = np.load(task_cfg.mask.path)
+        logger.info(f"Loaded mask from {task_cfg.mask_path}")
+        mask = np.load(task_cfg.mask_path)
 
-    # Mask out
-    img[:, :, mask] = 0
-
+    mask = torch.tensor(mask)
     # Forward func
-    metric = eval(task_cfg.get("metric", F.mse_loss))
+    metric = eval(task_cfg.get("metric", "F.mse_loss"))
 
     def _mask_image(image, mask):
         assert image.ndim == 4, "Expected NCHW format"
         assert mask.ndim == 2, "Expected HW format"
-        return image[:, :, mask]
+
+        # Where mask is 1, nullify
+        mask = rearrange(mask, "h w -> 1 1 h w")
+        zeroed_image = torch.zeros_like(image)
+        return torch.where(mask == 0, image, zeroed_image)
 
     forward_func = partial(_mask_image, mask=mask)
 

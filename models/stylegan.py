@@ -459,10 +459,16 @@ class Generator(nn.Module):
         return noises
 
     def mean_latent(self, n_latent):
+        """
+        Mean latent vector
+
+        :param n_latent: Number of latents to average over, typically 4096
+        :return: 512 sized vector
+        """
         latent_in = torch.randn(
             n_latent, self.style_dim, device=self.input.input.device
         )
-        latent = self.style(latent_in).mean(0, keepdim=True)
+        latent = self.style(latent_in).mean(0)
 
         return latent
 
@@ -470,7 +476,7 @@ class Generator(nn.Module):
         latent_in = torch.randn(
             1, self.style_dim, device=self.input.input.device
         )
-        return self.get_latent(latent_in)
+        return self.get_latent(latent_in).squeeze(0)
 
     def get_latent(self, input):
         return self.style(input)

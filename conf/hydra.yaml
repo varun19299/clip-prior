@@ -1,9 +1,9 @@
 # Hydra configs
 hydra:
   run:
-    dir: ./outputs/${img.name}/${exp_name}/${hydra.job.override_dirname}
+    dir: ./outputs/${exp_name}/${img.name}/${hydra.job.override_dirname}
   sweep:
-    dir: ./outputs/${img.name}/${exp_name}/
+    dir: ./outputs/${exp_name}/${img.name}/
     subdir: ${hydra.job.override_dirname}
   job_logging:
     root:
