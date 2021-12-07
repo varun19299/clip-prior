@@ -90,7 +90,9 @@ def main(cfg: DictConfig):
     random_latent.requires_grad = True
 
     # Setup forward func
-    img_gt, forward_func, metric = task_registry[cfg.task.name](img_gt, cfg.task)
+    img_gt, forward_func, metric = task_registry[cfg.task.name](
+        img_gt, cfg.task, device
+    )
 
     # wandb
     setup_wandb(cfg, img_gt, forward_func)

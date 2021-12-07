@@ -2,14 +2,14 @@ import os
 from contextlib import contextmanager
 from typing import Dict, List, Tuple
 
+import cv2
+import numpy as np
 import torch
 import wandb
 from einops import rearrange
 from omegaconf import OmegaConf
 from torch.nn import functional as F
-
 from torch.optim import Optimizer
-import numpy as np
 
 
 @contextmanager
@@ -122,7 +122,8 @@ def preprocess_for_CLIP(image):
 
 
 def train_setup(cfg):
-    print(OmegaConf.to_yaml(cfg))
+    if not cfg.get("silent"):
+        print(OmegaConf.to_yaml(cfg))
 
     # Manual seeds
     manual_seed(cfg.get("seed"))
@@ -171,10 +172,10 @@ def setup_wandb(cfg, img, forward_func):
 
 
 def save_images(**kwargs):
-    for name, tensor in kwargs:
+    for name, tensor in kwargs.items():
         img = rearrange(tensor, "1 c h w -> h w c")
         img = (img - img.min()) / (img.max() - img.min())
 
-        img = img.detach().numpy()[:, :, ::-1] * 255.0
+        img = img.detach().cpu().numpy()[:, :, ::-1] * 255.0
 
         cv2.imwrite(f"{name}.png", img)

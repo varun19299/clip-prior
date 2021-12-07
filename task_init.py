@@ -41,7 +41,7 @@ def _register(*aliases):
 
 
 @_register()
-def super_resolution(img, task_cfg):
+def super_resolution(img, task_cfg, device=torch.device("cpu")):
     forward_func = eval(task_cfg.get("downsample_func", BicubicDownSample))(
         task_cfg.factor
     )
@@ -51,7 +51,7 @@ def super_resolution(img, task_cfg):
 
 
 @_register("gaussian_deblurring", "motion_deblurring")
-def deblurring(img, task_cfg):
+def deblurring(img, task_cfg, device=torch.device("cpu")):
     forward_func = eval(
         task_cfg.get("blur_func", "filters.GaussianBlur2d((10, 10), 10)")
     )
@@ -62,7 +62,7 @@ def deblurring(img, task_cfg):
 
 
 @_register()
-def inpainting(img, task_cfg):
+def inpainting(img, task_cfg, device=torch.device("cpu")):
     # Rearrange, normalize to 0...1
     img_draw = rearrange(img.cpu().clone(), "1 c h w -> h w c")
     img_draw = (img_draw - img_draw.min()) / (img_draw.max() - img_draw.min())
@@ -98,5 +98,101 @@ def inpainting(img, task_cfg):
         return torch.where(mask == 0, image, zeroed_image)
 
     forward_func = partial(_mask_image, mask=mask)
+
+    return img, forward_func, metric
+
+
+def fft_conv2d(input, kernel):
+    """
+    Source: https://github.com/siddiquesalman/flatnet/blob/d1c15ceeca00db57befa9db17bb02047a60a1a79/models/fftlayer.py#L19
+
+    Computes the convolution in the frequency domain given
+    Expects input and kernel already in frequency domain!
+    :param input: shape (B, Cin, H, W)
+    :param kernel: shape (Cout, Cin, H, W)
+    :param bias: shape of (B, Cout, H, W)
+    :return:
+    """
+    input = torch.fft.rfft2(input)
+    kernel = torch.fft.rfft2(kernel)
+
+    out = input * kernel
+
+    out = torch.fft.irfft2(out)
+
+    return out
+
+
+def roll_n(X, axis, n):
+    """
+    Source: https://github.com/siddiquesalman/flatnet/blob/d1c15ceeca00db57befa9db17bb02047a60a1a79/utils/ops.py#L46
+    :param X:
+    :param axis:
+    :param n:
+    :return:
+    """
+    f_idx = tuple(
+        slice(None, None, None) if i != axis else slice(0, n, None)
+        for i in range(X.dim())
+    )
+    b_idx = tuple(
+        slice(None, None, None) if i != axis else slice(n, None, None)
+        for i in range(X.dim())
+    )
+    front = X[f_idx]
+    back = X[b_idx]
+    return torch.cat([back, front], axis)
+
+
+@_register()
+def lensless(img, task_cfg, device=torch.device("cpu")):
+    def _simulate(image, psf):
+        assert image.ndim == 4, "Expected NCHW format"
+        assert psf.ndim == 2, "Expected HW format"
+
+        _, _, h, w = image.shape
+
+        psf_h, psf_w = psf.shape
+
+        image = F.pad(image, (psf_w // 2, psf_w // 2, psf_h // 2, psf_h // 2))
+        psf = F.pad(psf, (w // 2, w // 2, h // 2, h // 2))
+
+        # Centre roll
+        for dim in range(2):
+            psf = roll_n(psf, axis=dim, n=psf.size(dim) // 2)
+
+        # Where mask is 1, nullify
+        psf = rearrange(psf, "h w -> 1 1 h w")
+        img_out = fft_conv2d(image, psf)
+        _, _, h_out, w_out = img_out.shape
+
+        # breakpoint()
+        # # plot
+        # img_plot = rearrange(img_out, "1 c h w -> h w c")
+        # img_plot = (img_plot - img_plot.min()) / (img_plot.max() - img_plot.min())
+        # plt.imshow(img_plot)
+        # plt.show()
+
+        # Center crop
+        img_out = img_out[
+            :,
+            :,
+            h_out // 2 - h // 2 : h_out // 2 + h // 2,
+            w_out // 2 - w // 2 : w_out // 2 + w // 2,
+        ]
+
+        return img_out
+
+    # Load psf
+    psf = np.load(task_cfg.get("psf_path"))
+    psf = torch.tensor(psf).float().to(device=torch.device("cpu"))
+
+    # Centre roll
+    # for dim in range(2):
+    #     psf = roll_n(psf, axis=dim, n=psf.size(dim) // 2)
+
+    forward_func = partial(_simulate, psf=psf)
+
+    metric = eval(task_cfg.get("metric", F.mse_loss))
 
     return img, forward_func, metric

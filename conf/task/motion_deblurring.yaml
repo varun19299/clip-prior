@@ -1,5 +1,5 @@
 name: motion_deblurring
-kernel_size: 511
+kernel_size: 401
 angle: 30
 direction: 0.5
 blur_func: filters.MotionBlur(${task.kernel_size}, ${task.angle}, ${task.direction})

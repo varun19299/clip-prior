@@ -8,6 +8,18 @@ from contextlib import contextmanager
 
 @contextmanager
 def catchtime() -> float:
+    """
+    Usage
+
+    ```
+    with catchtime() as t:
+        do task
+
+    print(t())
+    ```
+
+    :return: time context
+    """
     start = perf_counter()
     yield lambda: perf_counter() - start
 

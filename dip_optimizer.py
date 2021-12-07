@@ -41,7 +41,7 @@ def main(cfg: DictConfig):
     text = clip.tokenize([caption]).to(device)
 
     # Setup forward func
-    img_gt, forward_func, metric = task_registry[cfg.task.name](img_gt, cfg.task)
+    img_gt, forward_func, metric = task_registry[cfg.task.name](img_gt, cfg.task, device)
 
     # wandb
     setup_wandb(cfg, img_gt, forward_func)
