@@ -8,8 +8,9 @@ hydra-joblib-launcher
 hydra-optuna-sweeper
 
 ipython
-kornia
+kornia>=0.6
 loguru
+lpips
 numpy
 matplotlib
 opencv-python
@@ -20,3 +21,6 @@ wandb
 
 # CLIP
 git+https://github.com/openai/CLIP.git
+
+# MS-SSIM
+git+https://github.com/jorge-pessoa/pytorch-msssim.git

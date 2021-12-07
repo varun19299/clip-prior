@@ -8,17 +8,18 @@ from loguru import logger
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from loss import CLIPLoss, LossGeocross
+from loss import CLIPLoss, LossGeocross, dump_metrics
 from models.stylegan import Generator
 from task_init import task_registry
 from utils.catch_error import catch_error_decorator
+from utils.data import load_latent_or_img, load_caption
 from utils.train_helper import (
     get_optimizer_lr_scheduler,
     train_setup,
     wandb_image,
     setup_wandb,
+    save_images,
 )
-from utils.data import load_latent_or_img
 
 
 def set_noise_vars(g_ema, stylegan_cfg):
@@ -63,39 +64,45 @@ def set_noise_vars(g_ema, stylegan_cfg):
     return noise_ll, noise_var_ll
 
 
+def load_stylegan(stylegan_cfg):
+    g_ema = Generator(stylegan_cfg.size, 512, 8)
+    logger.info(f"Loading StyleGANv2 ckpt from {stylegan_cfg.ckpt}")
+    stylegan_ckpt = torch.load(stylegan_cfg.ckpt, map_location="cpu")["g_ema"]
+    g_ema.load_state_dict(stylegan_ckpt, strict=False)
+    g_ema.eval()
+
+    return g_ema
+
+
 @catch_error_decorator
 @hydra.main(config_name=Path(__file__).stem, config_path="conf")
 def main(cfg: DictConfig):
     device = train_setup(cfg)
 
     # StyleGANv2
-    g_ema = Generator(cfg.stylegan.size, 512, 8)
-    logger.info(f"Loading StyleGANv2 ckpt from {cfg.stylegan.ckpt}")
-    stylegan_ckpt = torch.load(cfg.stylegan.ckpt, map_location="cpu")["g_ema"]
-    g_ema.load_state_dict(stylegan_ckpt, strict=False)
-    g_ema.eval()
-    g_ema = g_ema.to(device)
+    g_ema = load_stylegan(cfg.stylegan).to(device)
 
-    img = load_latent_or_img(stylegan_gen=g_ema, **cfg.img)
+    img_gt = load_latent_or_img(stylegan_gen=g_ema, **cfg.img)
 
     # Random init, from where optimization begins
     random_latent = g_ema.random_latent().clone().detach()
     random_latent = random_latent.unsqueeze(0).repeat(1, 18, 1)
     random_latent.requires_grad = True
 
-    # Setup forward func, modify img
-    img, forward_func, metric = task_registry[cfg.task.name](img, cfg.task)
+    # Setup forward func
+    img_gt, forward_func, metric = task_registry[cfg.task.name](img_gt, cfg.task)
 
     # wandb
-    setup_wandb(cfg, img, forward_func)
+    setup_wandb(cfg, img_gt, forward_func)
 
     # CLIP model
     clip_loss = CLIPLoss(image_size=cfg.stylegan.size, device=device)
 
     # Preprocess
-    text = clip.tokenize([cfg.img.caption]).to(device)
+    caption = load_caption(cfg.img.caption)
+    text = clip.tokenize([caption]).to(device)
 
-    img = img.to(device)
+    img_gt = img_gt.to(device)
 
     # Noise tensors, including those that require gradients
     noise_ll, noise_var_ll = set_noise_vars(g_ema, cfg.stylegan)
@@ -114,7 +121,7 @@ def main(cfg: DictConfig):
         else:
             optim.zero_grad()
 
-        out, _ = g_ema(
+        img_out, _ = g_ema(
             [random_latent],
             input_is_latent=True,
             noise_tensor_ll=noise_ll,
@@ -122,10 +129,10 @@ def main(cfg: DictConfig):
         )
 
         # CLIP similarity
-        loss_clip = clip_loss(out, text) * cfg.loss.clip
+        loss_clip = clip_loss(img_out, text) * cfg.loss.clip
 
         # MSE
-        loss_forward = metric(forward_func(img), forward_func(out))
+        loss_forward = metric(forward_func(img_gt), forward_func(img_out))
         loss_forward *= cfg.loss.forward
 
         # Geocross
@@ -149,11 +156,22 @@ def main(cfg: DictConfig):
         if step % cfg.train.log_steps == 0:
             log_dict.update(
                 {
-                    "output": wandb_image(out, cfg.img.name),
-                    "output_forward": wandb_image(forward_func(out), cfg.img.name),
+                    "output": wandb_image(img_out, cfg.img.name),
+                    "output_forward": wandb_image(forward_func(img_out), cfg.img.name),
                 }
             )
             wandb.log(log_dict, step=step)
+
+    # Collate metrics
+    dump_metrics(img_out, img_gt, text, clip_loss, device)
+
+    # Dump gt, forward gt, out, forward out
+    save_images(
+        groundtruth=img_gt,
+        groundtruth_forward=forward_func(img_gt),
+        recovered=img_out,
+        recovered_forward=forward_func(img_out),
+    )
 
 
 if __name__ == "__main__":

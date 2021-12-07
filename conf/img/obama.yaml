@@ -1,4 +1,6 @@
 # @package img
 name: obama
-latent_path: ${hydra:runtime.cwd}/data/latents/${img.name}.pt
+path: ${hydra:runtime.cwd}/data/latents/${img.name}.pt
+height: ${stylegan.size}
+width: ${stylegan.size}
 caption: This is president Barack Obama

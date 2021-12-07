@@ -7,16 +7,18 @@ import wandb
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-from utils.data import load_latent_or_img
 from loss import CLIPLoss
+from loss import dump_metrics
 from models import registry
 from task_init import task_registry
 from utils.catch_error import catch_error_decorator
+from utils.data import load_latent_or_img, load_caption
 from utils.train_helper import (
     train_setup,
     get_optimizer_lr_scheduler,
     setup_wandb,
-    wandb_image
+    wandb_image,
+    save_images,
 )
 
 
@@ -26,7 +28,7 @@ def main(cfg: DictConfig):
     device = train_setup(cfg)
 
     # Image (1CHW)
-    img = load_latent_or_img(**cfg.img)
+    img_gt = load_latent_or_img(**cfg.img)
 
     # CLIP model
     clip_loss = CLIPLoss(image_size=cfg.img.height, device=device)
@@ -35,17 +37,18 @@ def main(cfg: DictConfig):
     prior_model = registry[cfg.model.name](**cfg.model.kwargs).to(device)
 
     # Preprocess
-    text = clip.tokenize([cfg.img.caption]).to(device)
+    caption = load_caption(cfg.img.caption)
+    text = clip.tokenize([caption]).to(device)
 
-    # Setup forward func, modify img
-    img, forward_func, metric = task_registry[cfg.task.name](img, cfg.task)
+    # Setup forward func
+    img_gt, forward_func, metric = task_registry[cfg.task.name](img_gt, cfg.task)
 
     # wandb
-    setup_wandb(cfg, img, forward_func)
+    setup_wandb(cfg, img_gt, forward_func)
 
     # Noise tensor
-    noise_tensor = torch.rand(size=img.shape).to(device)
-    img = img.to(device)
+    noise_tensor = torch.rand(size=img_gt.shape).to(device)
+    img_gt = img_gt.to(device)
 
     # Optimizer
     optim, lr_scheduler = get_optimizer_lr_scheduler(
@@ -62,13 +65,13 @@ def main(cfg: DictConfig):
         else:
             optim.zero_grad()
 
-        out = prior_model(noise_tensor)
+        img_out = prior_model(noise_tensor)
 
         # CLIP similarity
-        loss_clip = clip_loss(out, text) * cfg.loss.clip
+        loss_clip = clip_loss(img_out, text) * cfg.loss.clip
 
         # MSE
-        loss_forward = metric(forward_func(img), forward_func(out))
+        loss_forward = metric(forward_func(img_gt), forward_func(img_out))
         loss_forward *= cfg.loss.forward
 
         loss = loss_forward + loss_clip
@@ -88,11 +91,22 @@ def main(cfg: DictConfig):
         if step % cfg.train.log_steps == 0:
             log_dict.update(
                 {
-                    "output": wandb_image(out, cfg.img.name),
-                    "output_forward": wandb_image(forward_func(out), cfg.img.name),
+                    "output": wandb_image(img_out, cfg.img.name),
+                    "output_forward": wandb_image(forward_func(img_out), cfg.img.name),
                 }
             )
             wandb.log(log_dict, step=step)
+
+    # Collate metrics
+    dump_metrics(img_out, img_gt, text, clip_loss, device)
+
+    # Dump gt, forward gt, out, forward out
+    save_images(
+        groundtruth=img_gt,
+        groundtruth_forward=forward_func(img_gt),
+        recovered=img_out,
+        recovered_forward=forward_func(img_out),
+    )
 
 
 if __name__ == "__main__":

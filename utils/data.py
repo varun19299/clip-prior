@@ -1,8 +1,12 @@
+from typing import Union
+
 import cv2
 from kornia.geometry import resize, center_crop
 import torch
 from matplotlib import pyplot as plt
 from pathlib import Path
+
+from omegaconf import DictConfig
 
 from models.stylegan import Generator
 
@@ -107,3 +111,25 @@ def load_latent_or_img(path, **kwargs):
         img = load_img(path=path, **kwargs)
 
     return img
+
+
+def load_caption(caption_cfg: Union[str, DictConfig]) -> str:
+    """
+    Load captions from caption_cfg
+    :param caption_cfg: DictConfig
+        (in which case we look for a file to load from)
+         or the caption itself
+    :return: image caption
+    """
+    if isinstance(caption_cfg, str):
+        return caption_cfg
+    elif isinstance(caption_cfg, DictConfig):
+        if caption_cfg.get("path"):
+            with open(caption_cfg.path) as f:
+                lines = f.readlines()[: caption_cfg.get("lines", None)]
+
+            logger.info(f"Loaded {len(lines)} from {caption_cfg.path}")
+
+            return " ".join(lines)
+    else:
+        raise AssertionError

@@ -1,5 +1,10 @@
+import json
+
 import clip
+import kornia
+import lpips
 import torch
+import pytorch_msssim
 
 
 class CLIPLoss(torch.nn.Module):
@@ -29,3 +34,39 @@ def LossGeocross(latent):
         D = 2 * torch.atan2(A, B)
         D = ((D.pow(2) * 512).mean((1, 2)) / 8.0).sum()
         return D
+
+
+def dump_metrics(img_out, img_gt, text, clip_loss, device=torch.device("cpu")):
+    """
+    Dumps all metrics
+
+    :param img_out: Output image NCHW
+    :param img_gt: GT image NCHW
+    :param text: Caption supplied
+    :param device: Accelerator
+    """
+    metrics_dict = {}
+
+    # LPIPS
+    loss_fn_alex = lpips.LPIPS(net="alex").to(device)
+    metrics_dict["lpips_score"] = loss_fn_alex(img_out, img_gt).item()
+
+    # PSNR
+    metrics_dict["psnr_score"] = kornia.metrics.psnr(img_out, img_gt).item()
+
+    # SSIM
+    # Recommended window size 11
+    # from Wang (2004), "Image quality assessment: from error visibility to structural similarity"
+    metrics_dict["ssim_score"] = kornia.metrics.ssim(
+        img_out, img_gt, window_size=11
+    ).item()
+
+    # CLIP similarity
+    metrics_dict["clip_score"] = clip_loss(img_out, text).item()
+
+    # Pytorch MS-SSIM
+    # https://github.com/jorge-pessoa/pytorch-msssim
+    metrics_dict["ms_ssim"] = pytorch_msssim.msssim(img_out, img_gt)
+
+    with open("metrics.json", "w") as f:
+        json.dump(metrics_dict, f, sort_keys=True, indent=4)

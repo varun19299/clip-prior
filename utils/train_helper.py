@@ -4,6 +4,7 @@ from typing import Dict, List, Tuple
 
 import torch
 import wandb
+from einops import rearrange
 from omegaconf import OmegaConf
 from torch.nn import functional as F
 
@@ -167,3 +168,13 @@ def setup_wandb(cfg, img, forward_func):
             },
             step=0,
         )
+
+
+def save_images(**kwargs):
+    for name, tensor in kwargs:
+        img = rearrange(tensor, "1 c h w -> h w c")
+        img = (img - img.min()) / (img.max() - img.min())
+
+        img = img.detach().numpy()[:, :, ::-1] * 255.0
+
+        cv2.imwrite(f"{name}.png", img)

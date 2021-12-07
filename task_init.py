@@ -21,11 +21,26 @@ from utils.bicubic import BicubicDownSample
 task_registry = {}
 
 
-def _register(func):
-    task_registry[func.__name__] = func
+def _register(*aliases):
+    """
+    Adds functions to task registry
+
+    :param aliases: Other aliases besides the function name
+    :return: register decorator
+    """
+
+    def decorator(func):
+        task_registry[func.__name__] = func
+
+        for name in aliases:
+            task_registry[name] = func
+
+        return func
+
+    return decorator
 
 
-@_register
+@_register()
 def super_resolution(img, task_cfg):
     forward_func = eval(task_cfg.get("downsample_func", BicubicDownSample))(
         task_cfg.factor
@@ -35,7 +50,7 @@ def super_resolution(img, task_cfg):
     return img, forward_func, metric
 
 
-@_register
+@_register("gaussian_deblurring", "motion_deblurring")
 def deblurring(img, task_cfg):
     forward_func = eval(
         task_cfg.get("blur_func", "filters.GaussianBlur2d((10, 10), 10)")
@@ -46,7 +61,7 @@ def deblurring(img, task_cfg):
     return img, forward_func, metric
 
 
-@_register
+@_register()
 def inpainting(img, task_cfg):
     # Rearrange, normalize to 0...1
     img_draw = rearrange(img.cpu().clone(), "1 c h w -> h w c")

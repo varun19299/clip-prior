@@ -1,6 +1,6 @@
-name: deblurring
-kernel_size: (511, 511)
+name: motion_deblurring
+kernel_size: 511
 angle: 30
-directon: 0.5
+direction: 0.5
 blur_func: filters.MotionBlur(${task.kernel_size}, ${task.angle}, ${task.direction})
 metric: F.mse_loss
