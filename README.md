@@ -25,8 +25,54 @@ Avaliable at `outputs/ckpt`:
 
 ## Data
 
-* [FFHQ](): each image has original, estimated latent vector and inversion.
+* [FFHQ](https://github.com/NVlabs/ffhq-dataset) | `data/ffhq`: each image has original, estimated latent vector and inversion.
+* [Celeba HQ](https://github.com/IIGROUP/Multi-Modal-CelebA-HQ-Dataset) | `data/celeba-hq`: has original, captions, latent (for a few) and inversion (for a few).
 
+## Running metrics
+
+### Check for these folders first...
+
+```
+data/celeba-hq
+|-- caption (30K txt files)
+|-- latents (if you want to set GT to the inversion)
+`-- rgb (30K jpg files)
+```
+
+### Multi-run with Hydra
+
+```
+python stylegan_optimizer.py img=celeba-hq exp_name=stylegan_metrics img.index='range(0,100)' -m
+```
+
+For `range` syntax, see [here](https://hydra.cc/docs/advanced/override_grammar/extended/) under section `Range Sweep`.
+
+If you wish to initialize the groundtruth explicitly from a StyleGAN latent file:
+
+```
+python stylegan_optimizer.py img=celeba-hq-latent exp_name=stylegan_metrics img.index='range(0,100)' -m
+```
+
+### The Sharp bits
+
+* **Choosing between latent and image**
+
+    We do this by looking at the extension of the path in `img.path`.
+    If it is a `.pth, .zip`, we load using `torch.load`, treat it as the latent to StyleGANv2.
+    Else if it one of `.png, .jpg, .jpeg`, we load the image using OpenCV2.
+    See `utils.data.load_latent_or_img`.
+    
+* **StyleGAN weights**
+    
+    We use the weights from the [e4e](https://github.com/omertov/encoder4editing) repository, which seem to be the weights ported from NVLabs (tensorflow) to pytorch using [rosinality](https://github.com/rosinality/stylegan2-pytorch)
+    The rosinality trained (not ported) weights however, are poor fidelity.
+   
+* **Caption: string vs text file**
+   
+    If string present, load it.
+    Else load full text file or (if provided) limited number of lines.
+    See `utils.data.load_caption`.
+    
 ## View all configs
 
 python dip_optimizer.py --cfg job

@@ -185,11 +185,7 @@ def lensless(img, task_cfg, device=torch.device("cpu")):
 
     # Load psf
     psf = np.load(task_cfg.get("psf_path"))
-    psf = torch.tensor(psf).float().to(device=torch.device("cpu"))
-
-    # Centre roll
-    # for dim in range(2):
-    #     psf = roll_n(psf, axis=dim, n=psf.size(dim) // 2)
+    psf = torch.tensor(psf).float().to(device)
 
     forward_func = partial(_simulate, psf=psf)
 

@@ -128,7 +128,7 @@ def load_caption(caption_cfg: Union[str, DictConfig]) -> str:
             with open(caption_cfg.path) as f:
                 lines = f.readlines()[: caption_cfg.get("lines", None)]
 
-            logger.info(f"Loaded {len(lines)} from {caption_cfg.path}")
+            logger.info(f"Loaded {len(lines)} lines from {caption_cfg.path}")
 
             return " ".join(lines)
     else:

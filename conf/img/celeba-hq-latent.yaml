@@ -3,7 +3,8 @@ index: 1
 name: celeba-hq_${img.index}
 height: 1024
 width: 1024
-path: ${hydra:runtime.cwd}/data/celeba-hq/rgb/${img.index}.jpg
+# Uses GAN inversion latents
+path: ${hydra:runtime.cwd}/data/celeba-hq/latents/latent-${img.index}.pt
 caption:
   path: ${hydra:runtime.cwd}/data/celeba-hq/caption/${img.index}.txt
   lines: 2
