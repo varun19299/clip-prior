@@ -42,7 +42,7 @@ data/celeba-hq
 ### Multi-run with Hydra
 
 ```
-python stylegan_optimizer.py img=celeba-hq exp_name=stylegan_metrics img.index='range(0,100)' -m
+python stylegan_optimizer.py task=super_resolution img=celeba-hq exp_name=stylegan_metrics img.index='range(0,100)' -m
 ```
 
 For `range` syntax, see [here](https://hydra.cc/docs/advanced/override_grammar/extended/) under section `Range Sweep`.
@@ -50,8 +50,16 @@ For `range` syntax, see [here](https://hydra.cc/docs/advanced/override_grammar/e
 If you wish to initialize the groundtruth explicitly from a StyleGAN latent file:
 
 ```
-python stylegan_optimizer.py img=celeba-hq-latent exp_name=stylegan_metrics img.index='range(0,100)' -m
+python stylegan_optimizer.py task=super_resolution img=celeba-hq-latent exp_name=stylegan_metrics img.index='range(0,100)' -m
 ```
+
+You can run across multiple tasks as (but not recommended at first. Indeed, you may want to run different images for different tasks too.)
+
+```
+python stylegan_optimizer.py task=super_resolution,lensless img=celeba-hq-latent exp_name=stylegan_metrics img.index='range(0,100)' -m
+```
+
+Runs across cartesian product of `tasks x range`.
 
 ### The Sharp bits
 
