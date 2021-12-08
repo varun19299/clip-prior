@@ -14,6 +14,8 @@ from loguru import logger
 
 from einops import rearrange
 
+import torchvision
+
 
 def load_img(
     path: str,
@@ -36,15 +38,17 @@ def load_img(
     img = center_crop(img.unsqueeze(0), (height, width), align_corners=False)
     img = img.squeeze(0).permute(1, 2, 0)
 
-    if plot:
-        plt.imshow(img)
-        plt.show()
-
-    if save_gt:
-        cv2.imwrite("gt.png", img.numpy()[:, :, ::-1] * 255.0)
-
     # H x W x 3 to NHWC
     img = rearrange(img, "h w c -> 1 c h w")
+
+    # 0...1 to -1...1
+    img = (img - 0.5) * 2
+
+    if plot:
+        img_draw = torchvision.utils.make_grid(img, normalize=True, range=(-1, 1))
+        plt.imshow(rearrange(img_draw, "c h w -> h w c"))
+        plt.show()
+
     return img
 
 
@@ -81,16 +85,10 @@ def load_latent(
             randomize_noise=False,
         )
 
-    if plot or save_gt:
-        img_draw = rearrange(img.cpu().clone(), "1 c h w -> h w c")
-        img_draw = (img_draw - img_draw.min()) / (img_draw.max() - img_draw.min())
-
     if plot:
-        plt.imshow(img_draw)
+        img_draw = torchvision.utils.make_grid(img, normalize=True, range=(-1, 1))
+        plt.imshow(rearrange(img_draw, "c h w -> h w c"))
         plt.show()
-
-    if save_gt:
-        cv2.imwrite("gt.png", img_draw.numpy()[:, :, ::-1] * 255.0)
 
     return img
 

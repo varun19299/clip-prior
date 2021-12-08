@@ -10,6 +10,7 @@ from einops import rearrange
 from omegaconf import OmegaConf
 from torch.nn import functional as F
 from torch.optim import Optimizer
+import torchvision
 
 
 @contextmanager
@@ -134,7 +135,7 @@ def train_setup(cfg):
     # Log more frequently on CPU
     # Assuming you will be debugging then
     if device == torch.device("cpu"):
-        cfg.train.log_steps = 5
+        cfg.train.log_steps = min(5, cfg.train.log_steps)
 
     return device
 
@@ -148,7 +149,7 @@ def wandb_image(img_tensor, caption: str = None):
     ]
 
 
-def setup_wandb(cfg, img, forward_func):
+def setup_wandb(cfg, img, forward_func, text):
     if cfg.wandb.use:
         with open(cfg.wandb.api_key) as f:
             os.environ["WANDB_API_KEY"] = f.read()
@@ -162,10 +163,16 @@ def setup_wandb(cfg, img, forward_func):
             save_code=True,
         )
 
+        caption_data = [[text]]
+        columns = ["text input"]
+
+        table = wandb.Table(data=caption_data, columns=columns)
+
         wandb.log(
             {
                 "groundtruth": wandb_image(img, cfg.img.name),
                 "input_image": wandb_image(forward_func(img), cfg.img.name),
+                "caption_table": table,
             },
             step=0,
         )
@@ -173,9 +180,4 @@ def setup_wandb(cfg, img, forward_func):
 
 def save_images(**kwargs):
     for name, tensor in kwargs.items():
-        img = rearrange(tensor, "1 c h w -> h w c")
-        img = (img - img.min()) / (img.max() - img.min())
-
-        img = img.detach().cpu().numpy()[:, :, ::-1] * 255.0
-
-        cv2.imwrite(f"{name}.png", img)
+        torchvision.utils.save_image(tensor, f"{name}.png", normalize=True, range=(-1, 1))

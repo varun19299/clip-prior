@@ -41,10 +41,12 @@ def main(cfg: DictConfig):
     text = clip.tokenize([caption]).to(device)
 
     # Setup forward func
-    img_gt, forward_func, metric = task_registry[cfg.task.name](img_gt, cfg.task, device)
+    img_gt, forward_func, metric = task_registry[cfg.task.name](
+        img_gt, cfg.task, device
+    )
 
     # wandb
-    setup_wandb(cfg, img_gt, forward_func)
+    setup_wandb(cfg, img_gt, forward_func, caption)
 
     # Noise tensor
     noise_tensor = torch.rand(size=img_gt.shape).to(device)
@@ -98,7 +100,9 @@ def main(cfg: DictConfig):
             wandb.log(log_dict, step=step)
 
     # Collate metrics
-    dump_metrics(img_out, img_gt, text, clip_loss, device)
+    metrics_dict = dump_metrics(img_out, img_gt, text, clip_loss, device)
+    if cfg.wandb.use:
+        wandb.run.summary.update(metrics_dict)
 
     # Dump gt, forward gt, out, forward out
     save_images(

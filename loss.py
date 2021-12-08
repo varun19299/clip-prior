@@ -5,6 +5,7 @@ import kornia
 import lpips
 import torch
 import pytorch_msssim
+from loguru import logger
 
 
 class CLIPLoss(torch.nn.Module):
@@ -47,26 +48,42 @@ def dump_metrics(img_out, img_gt, text, clip_loss, device=torch.device("cpu")):
     """
     metrics_dict = {}
 
+    # -1...1 -> 0...1
+    img_gt_normalized = (img_gt + 1) * 0.5
+    img_gt_normalized = torch.clamp(img_gt_normalized, min=0, max=1)
+    img_out_normalized = (img_out + 1) * 0.5
+    img_out_normalized = torch.clamp(img_out_normalized, min=0, max=1)
+
     # LPIPS
     loss_fn_alex = lpips.LPIPS(net="alex").to(device)
     metrics_dict["lpips_score"] = loss_fn_alex(img_out, img_gt).item()
 
     # PSNR
-    metrics_dict["psnr_score"] = kornia.metrics.psnr(img_out, img_gt).item()
+    metrics_dict["psnr_score"] = kornia.metrics.psnr(
+        img_out_normalized, img_gt_normalized, max_val=1
+    ).item()
 
     # SSIM
     # Recommended window size 11
     # from Wang (2004), "Image quality assessment: from error visibility to structural similarity"
-    metrics_dict["ssim_score"] = kornia.metrics.ssim(
-        img_out, img_gt, window_size=11
-    ).item()
+    metrics_dict["ssim_score"] = (
+        kornia.metrics.ssim(img_out_normalized, img_gt_normalized, window_size=11)
+        .mean()
+        .item()
+    )
 
     # CLIP similarity
     metrics_dict["clip_score"] = clip_loss(img_out, text).item()
 
     # Pytorch MS-SSIM
     # https://github.com/jorge-pessoa/pytorch-msssim
-    metrics_dict["ms_ssim"] = pytorch_msssim.msssim(img_out, img_gt)
+    metrics_dict["ms_ssim"] = pytorch_msssim.msssim(
+        img_out_normalized, img_gt_normalized
+    ).item()
 
     with open("metrics.json", "w") as f:
         json.dump(metrics_dict, f, sort_keys=True, indent=4)
+
+    logger.info(" | ".join([f"{k}:{v:.3f}" for k, v in metrics_dict.items()]))
+
+    return metrics_dict

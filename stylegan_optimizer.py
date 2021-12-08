@@ -94,9 +94,6 @@ def main(cfg: DictConfig):
         img_gt, cfg.task, device
     )
 
-    # wandb
-    setup_wandb(cfg, img_gt, forward_func)
-
     # CLIP model
     clip_loss = CLIPLoss(image_size=cfg.stylegan.size, device=device)
 
@@ -104,8 +101,10 @@ def main(cfg: DictConfig):
     caption = load_caption(cfg.img.caption)
     text = clip.tokenize([caption]).to(device)
 
-    img_gt = img_gt.to(device)
+    # wandb
+    setup_wandb(cfg, img_gt, forward_func, caption)
 
+    img_gt = img_gt.to(device)
     # Noise tensors, including those that require gradients
     noise_ll, noise_var_ll = set_noise_vars(g_ema, cfg.stylegan)
     var_list = [random_latent] + noise_var_ll
@@ -165,7 +164,9 @@ def main(cfg: DictConfig):
             wandb.log(log_dict, step=step)
 
     # Collate metrics
-    dump_metrics(img_out, img_gt, text, clip_loss, device)
+    metrics_dict = dump_metrics(img_out, img_gt, text, clip_loss, device)
+    if cfg.wandb.use:
+        wandb.run.summary.update(metrics_dict)
 
     # Dump gt, forward gt, out, forward out
     save_images(

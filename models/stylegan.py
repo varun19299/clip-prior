@@ -473,9 +473,7 @@ class Generator(nn.Module):
         return latent
 
     def random_latent(self):
-        latent_in = torch.randn(
-            1, self.style_dim, device=self.input.input.device
-        )
+        latent_in = torch.randn(1, self.style_dim, device=self.input.input.device)
         return self.get_latent(latent_in).squeeze(0)
 
     def get_latent(self, input):
