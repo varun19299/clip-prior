@@ -81,6 +81,10 @@ Runs across cartesian product of `tasks x range`.
     Else load full text file or (if provided) limited number of lines.
     See `utils.data.load_caption`.
     
+* **Verbosity**
+
+    Use `+silent=True` to supress printing configs.
+    
 ## View all configs
 
 python dip_optimizer.py --cfg job

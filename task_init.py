@@ -95,7 +95,7 @@ def inpainting(img, task_cfg, device=torch.device("cpu")):
         logger.info(f"Loaded mask from {task_cfg.mask.path}")
         mask = np.load(task_cfg.mask.path)
 
-    mask = torch.tensor(mask)
+    mask = torch.tensor(mask).to(device)
     # Forward func
     metric = eval(task_cfg.get("metric", "F.mse_loss"))
 

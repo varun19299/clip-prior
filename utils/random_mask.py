@@ -29,14 +29,14 @@ def generate_spiky_mask(
     Polygon will be centered around (ctrX, ctrY) i.e image center and with average radius as img_height//4
 
     irregularity - [0,1] indicating how much variance there is in the angular spacing of vertices. [0,1] will map to [0, 2pi/numberOfVerts]
-    spikeyness - [0,1] indicating how much variance there is in each vertex from the circle of radius aveRadius. [0,1] will map to [0, aveRadius]
+    spikeyness - [0,1] indicating how much variance there is in each vertex from the circle of radius avg_radius. [0,1] will map to [0, avg_radius]
     num_verts - self-explanatory
     """
     height_mid, width_mid = img_height // 2, img_width // 2
     verts = generate_polygon(
         ctrX=width_mid,
         ctrY=height_mid,
-        aveRadius=img_height // 4,
+        avg_radius=img_height // 3.5,
         irregularity=irregularity,
         spikeyness=spikeyness,
         num_verts=num_verts,
@@ -75,7 +75,7 @@ def generate_spiky_mask_efficiently(
     :param img_height:
     :param img_width:
     irregularity - [0,1] indicating how much variance there is in the angular spacing of vertices. [0,1] will map to [0, 2pi/numberOfVerts]
-    spikeyness - [0,1] indicating how much variance there is in each vertex from the circle of radius aveRadius. [0,1] will map to [0, aveRadius]
+    spikeyness - [0,1] indicating how much variance there is in each vertex from the circle of radius avg_radius. [0,1] will map to [0, avg_radius]
     num_verts - self-explanatory
     :return:
     """
@@ -98,7 +98,7 @@ def generate_spiky_mask_efficiently(
 
 
 @njit(cache=True, fastmath=True)
-def generate_polygon(ctrX, ctrY, aveRadius, irregularity, spikeyness, num_verts):
+def generate_polygon(ctrX, ctrY, avg_radius, irregularity, spikeyness, num_verts):
     """
     Source: https://newbedev.com/algorithm-to-generate-random-2d-polygon
 
@@ -109,16 +109,16 @@ def generate_polygon(ctrX, ctrY, aveRadius, irregularity, spikeyness, num_verts)
 
     Params:
     ctrX, ctrY - coordinates of the "centre" of the polygon
-    aveRadius - in px, the average radius of this polygon, this roughly controls how large the polygon is, really only useful for order of magnitude.
+    avg_radius - in px, the average radius of this polygon, this roughly controls how large the polygon is, really only useful for order of magnitude.
     irregularity - [0,1] indicating how much variance there is in the angular spacing of vertices. [0,1] will map to [0, 2pi/numberOfVerts]
-    spikeyness - [0,1] indicating how much variance there is in each vertex from the circle of radius aveRadius. [0,1] will map to [0, aveRadius]
+    spikeyness - [0,1] indicating how much variance there is in each vertex from the circle of radius avg_radius. [0,1] will map to [0, avg_radius]
     num_verts - self-explanatory
 
     Returns a list of vertices, in CCW order.
     """
 
     irregularity = clip(irregularity, 0, 1) * 2 * math.pi / num_verts
-    spikeyness = clip(spikeyness, 0, 1) * aveRadius
+    spikeyness = clip(spikeyness, 0, 1) * avg_radius
 
     # generate n angle steps
     angleSteps = []
@@ -139,7 +139,7 @@ def generate_polygon(ctrX, ctrY, aveRadius, irregularity, spikeyness, num_verts)
     points = []
     angle = random.uniform(0, 2 * math.pi)
     for i in numba.prange(num_verts):
-        r_i = clip(random.gauss(aveRadius, spikeyness), 0, 2 * aveRadius)
+        r_i = clip(random.gauss(avg_radius, spikeyness), 0, 2 * avg_radius)
         x = ctrX + r_i * math.cos(angle)
         y = ctrY + r_i * math.sin(angle)
         points.append((int(x), int(y)))
