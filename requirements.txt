@@ -9,13 +9,16 @@ hydra-optuna-sweeper
 
 ipython
 kornia>=0.6
+line_profiler
 loguru
 lpips
+numba
 numpy
 matplotlib
 opencv-python
 regex
 roipoly
+shapely
 tqdm
 wandb
 

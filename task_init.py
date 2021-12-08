@@ -14,6 +14,7 @@ from matplotlib import pyplot as plt
 from roipoly import RoiPoly
 from torch.nn import functional as F
 from kornia import filters
+from utils.random_mask import generate_spiky_mask
 import torch
 
 from utils.bicubic import BicubicDownSample
@@ -67,22 +68,32 @@ def inpainting(img, task_cfg, device=torch.device("cpu")):
     img_draw = rearrange(img.cpu().clone(), "1 c h w -> h w c")
     img_draw = (img_draw - img_draw.min()) / (img_draw.max() - img_draw.min())
 
-    # Choose RoI
-    if not Path(task_cfg.mask_path).exists():
-        logger.info(f"No mask found at {task_cfg.mask_path}")
+    if not Path(task_cfg.mask.path).exists():
+        logger.info(f"No mask found at {task_cfg.mask.path}")
 
-        plt.imshow(img_draw)
-        plt.title("Choose region to mask out")
-        my_roi = RoiPoly(color="r")
-        my_roi.display_roi()
+        # Choose RoI
+        if task_cfg.mask.generation == "manual":
+            logger.info("Please draw mask")
+            plt.imshow(img_draw)
+            plt.title("Choose region to mask out")
+            my_roi = RoiPoly(color="r")
+            my_roi.display_roi()
 
-        # Get mask
-        mask = my_roi.get_mask(img_draw[:, :, 0])
+            # Get mask
+            mask = my_roi.get_mask(img_draw[:, :, 0])
+        # Random mask
+        elif task_cfg.mask.generation == "random":
+            logger.info("Generating random mask")
+            h, w, _ = img_draw.shape
+            mask = generate_spiky_mask(h, w, **task_cfg.mask.kwargs)
 
-        np.save(task_cfg.mask_path, mask)
+        else:
+            raise AssertionError
+
+        np.save(task_cfg.mask.path, mask)
     else:
-        logger.info(f"Loaded mask from {task_cfg.mask_path}")
-        mask = np.load(task_cfg.mask_path)
+        logger.info(f"Loaded mask from {task_cfg.mask.path}")
+        mask = np.load(task_cfg.mask.path)
 
     mask = torch.tensor(mask)
     # Forward func
