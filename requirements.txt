@@ -1,6 +1,7 @@
 einops
 ftfy
 
+h5py
 # Hydra Dependencies
 hydra_colorlog
 hydra-core>=1.1

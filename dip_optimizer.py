@@ -29,6 +29,7 @@ def main(cfg: DictConfig):
 
     # Image (1CHW)
     img_gt = load_latent_or_img(**cfg.img)
+    img_gt = img_gt.to(device)
 
     # CLIP model
     clip_loss = CLIPLoss(image_size=cfg.img.height, device=device)
@@ -50,7 +51,6 @@ def main(cfg: DictConfig):
 
     # Noise tensor
     noise_tensor = torch.rand(size=img_gt.shape).to(device)
-    img_gt = img_gt.to(device)
 
     # Optimizer
     optim, lr_scheduler = get_optimizer_lr_scheduler(

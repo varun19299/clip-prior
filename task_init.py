@@ -51,13 +51,70 @@ def super_resolution(img, task_cfg, device=torch.device("cpu")):
     return img, forward_func, metric
 
 
-@_register("gaussian_deblurring", "motion_deblurring")
+@_register("gaussian_deblurring")
 def deblurring(img, task_cfg, device=torch.device("cpu")):
     forward_func = eval(
         task_cfg.get("blur_func", "filters.GaussianBlur2d((10, 10), 10)")
     )
 
     metric = eval(task_cfg.get("metric", F.mse_loss))
+
+    return img, forward_func, metric
+
+
+@_register()
+def motion_deblurring(img, task_cfg, device=torch.device("cpu")):
+    # Get filter
+    kernel = filters.get_motion_kernel2d(
+        task_cfg.kernel_size, task_cfg.angle, task_cfg.direction
+    )
+    # Pad and roll
+    _, _, h, w = img.shape
+    kernel = rearrange(kernel, "1 h w -> h w")
+
+    # Correlation <---> convolution swap
+    kernel = torch.flip(kernel, [0, 1])
+
+    # Send to device
+    kernel = kernel.to(device)
+
+    def _simulate(image, kernel):
+        assert image.ndim == 4, "Expected NCHW format"
+        assert kernel.ndim == 2, "Expected HW format"
+
+        _, _, h, w = image.shape
+
+        kernel_h, kernel_w = kernel.shape
+
+        image = F.pad(
+            image, (kernel_w // 2, kernel_w // 2 + 1, kernel_h // 2, kernel_h // 2 + 1)
+        )
+        kernel = F.pad(kernel, (w // 2, w // 2, h // 2, h // 2))
+
+        # Centre roll
+        for dim in range(2):
+            kernel = roll_n(kernel, axis=dim, n=kernel.size(dim) // 2)
+
+        # Where mask is 1, nullify
+        kernel = rearrange(kernel, "h w -> 1 1 h w")
+
+        # Where mask is 1, nullify
+        img_out = fft_conv2d(image, kernel)
+        _, _, h_out, w_out = img_out.shape
+
+        # Center crop
+        img_out = img_out[
+            :,
+            :,
+            h_out // 2 - h // 2 : h_out // 2 + h // 2,
+            w_out // 2 - w // 2 : w_out // 2 + w // 2,
+        ]
+
+        return img_out
+
+    metric = eval(task_cfg.get("metric", F.mse_loss))
+
+    forward_func = partial(_simulate, kernel=kernel)
 
     return img, forward_func, metric
 
@@ -191,6 +248,12 @@ def lensless(img, task_cfg, device=torch.device("cpu")):
             h_out // 2 - h // 2 : h_out // 2 + h // 2,
             w_out // 2 - w // 2 : w_out // 2 + w // 2,
         ]
+
+        # Normalize
+        img_out = (img_out - img_out.min()) / (img_out.max() - img_out.min())
+
+        # 0...1 -> -1...1
+        img_out = (img_out - 0.5) * 2
 
         return img_out
 

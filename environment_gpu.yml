@@ -9,6 +9,7 @@ dependencies:
   - pytorch
   - cudatoolkit=11.1
   - torchvision
+  - faiss-gpu
   - pip
   - pip:
     - -r requirements.txt

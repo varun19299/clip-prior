@@ -8,6 +8,7 @@ dependencies:
   - python=3.9
   - pytorch
   - torchvision
+  - faiss
   - pip
   - pip:
     - -r requirements.txt
