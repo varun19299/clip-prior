@@ -157,7 +157,7 @@ def main(cfg: DictConfig):
         if step % cfg.train.log_steps == 0:
             log_dict.update(
                 {
-                    "output": wandb_image(img_out, cfg.img.name),
+                    "output": wandb_image(torch.clip(img_out, -1, 1), cfg.img.name),
                     "output_forward": wandb_image(forward_func(img_out), cfg.img.name),
                 }
             )
