@@ -82,7 +82,7 @@ def main(cfg: DictConfig):
     # StyleGANv2
     g_ema = load_stylegan(cfg.stylegan).to(device)
 
-    img_gt = load_latent_or_img(stylegan_gen=g_ema, **cfg.img)
+    img_gt = load_latent_or_img(stylegan_gen=g_ema, device=device, **cfg.img)
 
     # Random init, from where optimization begins
     random_latent = g_ema.random_latent().clone().detach()

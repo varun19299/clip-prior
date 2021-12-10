@@ -24,7 +24,6 @@ def load_img(
     bits: int = 8,
     plot: bool = False,
     crop_mode: str = "centre-crop",
-    save_gt: bool = False,
     **kwargs,
 ) -> torch.Tensor:
     img = cv2.imread(str(path), -1)[:, :, ::-1] / (2 ** bits - 1)
@@ -56,7 +55,7 @@ def load_latent(
     stylegan_gen: Generator,
     path: str,
     plot: bool = False,
-    save_gt: bool = False,
+    device: torch.device = torch.device("cpu"),
     **kwargs,
 ):
 
@@ -77,6 +76,9 @@ def load_latent(
     else:
         raise AssertionError
 
+    # Push latent to device
+    latent = latent.to(device)
+
     # Generate img from StyleGAN
     with torch.no_grad():
         img, _ = stylegan_gen(
@@ -86,7 +88,7 @@ def load_latent(
         )
 
     if plot:
-        img_draw = torchvision.utils.make_grid(img, normalize=True, range=(-1, 1))
+        img_draw = torchvision.utils.make_grid(img.cpu(), normalize=True, range=(-1, 1))
         plt.imshow(rearrange(img_draw, "c h w -> h w c"))
         plt.show()
 
