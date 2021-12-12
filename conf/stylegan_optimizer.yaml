@@ -7,7 +7,7 @@ defaults:
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
-exp_name: stylegan
+exp_name: stylegan_${stylegan.dataset}
 seed: null
 device: cuda # cpu or cuda
 
@@ -18,7 +18,8 @@ train:
 
 stylegan:
   size: 1024
-  ckpt: ${hydra:runtime.cwd}/outputs/ckpt/stylegan2-ffhq-config-f.pt
+  dataset: ffhq
+  ckpt: ${hydra:runtime.cwd}/outputs/ckpt/stylegan2-${stylegan.dataset}-config-f.pt
   noise_type: trainable # or zero or fixed
   num_trainable_noise_layers: 5
   bad_noise_layers: [17]
@@ -31,6 +32,6 @@ loss:
 wandb:
   use: True
   entity: clip-recovery
-  project: stylegan_${task.name}
+  project: stylegan_${stylegan.dataset}_${task.name}
   api_key: ${hydra:runtime.cwd}/wandb_api.key
   name: ${exp_name}_${img.name}

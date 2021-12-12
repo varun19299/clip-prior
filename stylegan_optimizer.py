@@ -86,7 +86,7 @@ def main(cfg: DictConfig):
 
     # Random init, from where optimization begins
     random_latent = g_ema.random_latent().clone().detach()
-    random_latent = random_latent.unsqueeze(0).repeat(1, 18, 1)
+    random_latent = random_latent.unsqueeze(0).repeat(1, g_ema.n_latent, 1)
     random_latent.requires_grad = True
 
     # Setup forward func

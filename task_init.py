@@ -123,7 +123,10 @@ def motion_deblurring(img, task_cfg, device=torch.device("cpu")):
 def inpainting(img, task_cfg, device=torch.device("cpu")):
     # Rearrange, normalize to 0...1
     img_draw = rearrange(img.cpu().clone(), "1 c h w -> h w c")
-    img_draw = (img_draw - img_draw.min()) / (img_draw.max() - img_draw.min())
+
+    img_draw = torch.clip(img_draw, -1, 1)
+    img_draw = (img_draw + 1) * 0.5
+    # img_draw = (img_draw - img_draw.min()) / (img_draw.max() - img_draw.min())
 
     if not Path(task_cfg.mask.path).exists():
         logger.info(f"No mask found at {task_cfg.mask.path}")

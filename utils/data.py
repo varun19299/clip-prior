@@ -69,10 +69,10 @@ def load_latent(
 
     # Either d or 18 x d needed.
     if latent.ndim == 2:
-        assert latent.shape[0] == 18, f"Required 18 x d, found {latent.shape}"
+        assert latent.shape[0] == stylegan_gen.n_latent, f"Required {stylegan_gen.n_latent} x d, found {latent.shape}"
         latent = latent.unsqueeze(0)
     elif latent.ndim == 1:
-        latent = latent.unsqueeze(0).repeat(1, 18, 1)
+        latent = latent.unsqueeze(0).repeat(1, stylegan_gen.n_latent, 1)
     else:
         raise AssertionError
 

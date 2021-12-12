@@ -4,4 +4,4 @@ name: obama-celeba-hq_${img.index}-custom
 height: 1024
 width: 1024
 path: ${hydra:runtime.cwd}/data/celeba-hq/rgb/${img.index}.jpg
-caption: This is president barack obama. He is dark skinned, has big ears and a bushy eyebrow.
+caption: This is president barack obama. He is dark skinned, has black eyes, salt and pepper hair, has big ears and a bushy eyebrow.

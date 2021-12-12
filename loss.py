@@ -28,12 +28,13 @@ def LossGeocross(latent):
     if latent.shape[1] == 1:
         return 0
     else:
-        X = latent.view(-1, 1, 18, 512)
-        Y = latent.view(-1, 18, 1, 512)
+        _, n_latent, latent_dim = latent.shape
+        X = latent.view(-1, 1, n_latent, latent_dim)
+        Y = latent.view(-1, n_latent, 1, latent_dim)
         A = ((X - Y).pow(2).sum(-1) + 1e-9).sqrt()
         B = ((X + Y).pow(2).sum(-1) + 1e-9).sqrt()
         D = 2 * torch.atan2(A, B)
-        D = ((D.pow(2) * 512).mean((1, 2)) / 8.0).sum()
+        D = ((D.pow(2) * latent_dim).mean((1, 2)) / 8.0).sum()
         return D
 
 
