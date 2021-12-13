@@ -85,6 +85,12 @@ Runs across cartesian product of `tasks x range`.
 
     Use `+silent=True` to supress printing configs.
     
+## Other StyleGANs
+
+* LSUN Church dataset: Seems to be 256ppx
+
+* Stanford Cars: 512ppx
+    
 ## View all configs
 
 python dip_optimizer.py --cfg job
