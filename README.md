@@ -1,8 +1,10 @@
 # README
 
+Authors: Varun Sundar, Abhay Kumar, Kalyani Unnikrishnan and Kriti Goyal.
+
 ## Install
 
-Pre-requisities:
+Pre-requisites:
 * conda
 
 `make install.cpu` or `make install.gpu` as required.
@@ -18,7 +20,7 @@ Copy your WandB API key to wandb_api.key. Will be used to login to your dashboar
 
 ## Note on StyleGAN ckpts
 
-Avaliable at `outputs/ckpt`:
+Available at `outputs/ckpt`:
 
 * [`rosalinity-stylegan2-ffhq-config-f.pt`](https://github.com/rosinality/stylegan2-pytorch#pretrained-checkpoints): from here, suitable ONLY for 256px.
 * [`stylegan2-ffhq-config-f.pt`](https://drive.google.com/file/d/1EM87UquaoQmk17Q8d5kYIAHqu0dkYqdT/view?usp=sharing): used in the e4e paper, looks like the converted NVLab ckpt. Suitable for 1MPixel.
@@ -83,9 +85,9 @@ Runs across cartesian product of `tasks x range`.
     
 * **Verbosity**
 
-    Use `+silent=True` to supress printing configs.
+    Use `+silent=True` to suppress printing configs.
     
-## Other StyleGANs
+## Other StyleGANs 
 
 * LSUN Church dataset: Seems to be 256ppx
 
@@ -93,6 +95,8 @@ Runs across cartesian product of `tasks x range`.
     
 ## View all configs
 
-python dip_optimizer.py --cfg job
+```
+python stylegan_optimizer.py --cfg job
+```
 
 We use [hydra](https://github.com/facebookresearch/hydra) for configs. YAML files present under conf/.

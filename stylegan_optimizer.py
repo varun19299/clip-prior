@@ -1,3 +1,6 @@
+"""
+Proposed Method
+"""
 from pathlib import Path
 
 import clip
